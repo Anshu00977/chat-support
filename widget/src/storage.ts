@@ -21,3 +21,7 @@ export function getStoredConversationId(shop: string): number | null {
 export function setStoredConversationId(shop: string, id: number) {
   localStorage.setItem(conversationKey(shop), String(id));
 }
+
+export function clearStoredConversationId(shop: string) {
+  localStorage.removeItem(conversationKey(shop));
+}

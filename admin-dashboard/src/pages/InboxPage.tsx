@@ -67,9 +67,13 @@ export function InboxPage() {
 
   return (
     <div className="inbox-page">
+      <div className="page-header">
+        <h2>Inbox</h2>
+      </div>
+
       <div className="inbox-filters">
         <select value={appId} onChange={(e) => setAppId(e.target.value)}>
-          <option value="">All stores</option>
+          <option value="">All apps</option>
           {apps.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name} ({a.shop})
@@ -98,10 +102,10 @@ export function InboxPage() {
         <ul className="conversation-list">
           {messages.map((m) => (
             <li key={m.id}>
-              <Link to={`/conversations/${m.id}`} className={`conversation-row status-${m.status.toLowerCase()}`}>
+              <Link to={`/conversations/${m.id}`} className="conversation-row">
                 <div className="conversation-row-top">
                   <span className="conversation-name">{m.name || m.email || "Anonymous visitor"}</span>
-                  <span className="conversation-status">{STATUS_LABELS[m.status]}</span>
+                  <span className={`badge badge-${m.status.toLowerCase()}`}>{STATUS_LABELS[m.status]}</span>
                 </div>
                 <div className="conversation-row-bottom">
                   <span className="conversation-shop">{m.shop}</span>

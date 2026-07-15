@@ -1,6 +1,6 @@
 import type { Server as HttpServer } from "http";
 import { Server, type Socket } from "socket.io";
-import { ADMINS_ROOM, SocketEvents, conversationRoom, type ReplySender } from "@chat-support/shared";
+import { ADMINS_ROOM, SocketEvents, conversationRoom, type Attachment, type ReplySender } from "@chat-support/shared";
 import { env } from "../config/env";
 import { prisma } from "../prisma";
 import { verifyAdminToken } from "../utils/jwt";
@@ -12,15 +12,21 @@ interface SocketData {
   adminName?: string;
 }
 
+type Ack<T> = (res: { ok: true; data: T } | { ok: false; error: string }) => void;
+
 // socket.io does not forward rejected promises anywhere (unlike Express with
 // express-async-errors) — an uncaught rejection here would crash the whole
-// process, so every async handler is wrapped to log and notify the client instead.
-function safeHandler<T>(socket: Socket, handler: (payload: T) => Promise<void>) {
-  return (payload: T) => {
-    handler(payload).catch((err) => {
-      console.error("Socket handler error:", err);
-      socket.emit("error_message", { error: err instanceof Error ? err.message : "Unexpected server error" });
-    });
+// process. Wrapping every handler this way also sends an acknowledgement back
+// to the caller so a failed (or silently dropped) event is visible client-side
+// instead of just vanishing — e.g. a chat message that never reaches the DB.
+function withAck<TPayload, TResult>(handler: (payload: TPayload) => Promise<TResult>) {
+  return (payload: TPayload, callback?: Ack<TResult>) => {
+    handler(payload)
+      .then((data) => callback?.({ ok: true, data }))
+      .catch((err) => {
+        console.error("Socket handler error:", err);
+        callback?.({ ok: false, error: err instanceof Error ? err.message : "Unexpected server error" });
+      });
   };
 }
 
@@ -49,20 +55,26 @@ export function initSocket(httpServer: HttpServer): Server {
 
     socket.on(
       SocketEvents.JOIN_CONVERSATION,
-      safeHandler(socket, async ({ conversationId }: { conversationId: number }) => {
+      withAck(async ({ conversationId }: { conversationId: number }) => {
         const exists = await prisma.message.findUnique({ where: { id: conversationId }, select: { id: true } });
-        if (!exists) return;
+        if (!exists) throw new Error("Conversation not found");
         socket.join(conversationRoom(conversationId));
+        return { conversationId };
       })
     );
 
     socket.on(
       SocketEvents.NEW_MESSAGE,
-      safeHandler(
-        socket,
-        async (payload: { conversationId: number; body: string; sender: ReplySender; adminName?: string }) => {
-          const { conversationId, body, sender, adminName } = payload;
-          if (!body?.trim()) return;
+      withAck(
+        async (payload: {
+          conversationId: number;
+          body: string;
+          sender: ReplySender;
+          adminName?: string;
+          attachments?: Attachment[];
+        }) => {
+          const { conversationId, body, sender, adminName, attachments } = payload;
+          if (!body?.trim() && !attachments?.length) throw new Error("Message is empty");
 
           const reply = await prisma.messageReply.create({
             data: {
@@ -71,6 +83,7 @@ export function initSocket(httpServer: HttpServer): Server {
               adminId: sender === "ADMIN" ? data.adminId ?? null : null,
               adminName: sender === "ADMIN" ? adminName ?? null : null,
               body,
+              attachments: attachments?.length ? (attachments as unknown as object[]) : undefined,
             },
           });
 
@@ -86,6 +99,8 @@ export function initSocket(httpServer: HttpServer): Server {
           // this conversation open) get de-duplicated by Socket.IO automatically,
           // unlike two separate .emit() calls which would double-deliver.
           io.to([conversationRoom(conversationId), ADMINS_ROOM]).emit(SocketEvents.MESSAGE_RECEIVED, reply);
+
+          return reply;
         }
       )
     );

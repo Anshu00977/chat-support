@@ -7,6 +7,7 @@ import { adminsRouter } from "./routes/admins.routes";
 import { appsRouter } from "./routes/apps.routes";
 import { messagesRouter } from "./routes/messages.routes";
 import { widgetRouter } from "./routes/widget.routes";
+import { uploadsRouter, UPLOADS_DIR } from "./routes/uploads.routes";
 
 export function createApp() {
   const app = express();
@@ -21,6 +22,7 @@ export function createApp() {
 
   // Widget bundle is served from the root, matching the ScriptTag src (/widget.js).
   app.use("/", widgetRouter);
+  app.use("/uploads", express.static(UPLOADS_DIR));
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
 
@@ -28,6 +30,7 @@ export function createApp() {
   app.use("/api/admins", adminsRouter);
   app.use("/api/apps", appsRouter);
   app.use("/api/messages", messagesRouter);
+  app.use("/api/uploads", uploadsRouter);
 
   // Centralized error handler: express-async-errors forwards any rejected
   // promise from an async route handler here instead of crashing the process.

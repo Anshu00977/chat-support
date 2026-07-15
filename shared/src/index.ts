@@ -18,6 +18,13 @@ export interface AdminDTO {
   createdAt: string;
 }
 
+export interface Attachment {
+  url: string;
+  name: string;
+  mimetype: string;
+  size: number;
+}
+
 export interface MessageReplyDTO {
   id: number;
   messageId: number;
@@ -25,7 +32,7 @@ export interface MessageReplyDTO {
   adminId: number | null;
   adminName: string | null;
   body: string;
-  attachments: string[] | null;
+  attachments: Attachment[] | null;
   createdAt: string;
 }
 

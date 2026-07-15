@@ -86,6 +86,21 @@ messagesRouter.get("/:id/history", async (req, res) => {
   res.json({ message });
 });
 
+/** Lets the customer end their own conversation from the widget — scoped to the visitor that owns it. */
+messagesRouter.post("/:id/close-by-visitor", async (req, res) => {
+  const id = Number(req.params.id);
+  const { visitorId } = req.body as { visitorId?: string };
+  if (!visitorId) return res.status(400).json({ error: "visitorId is required" });
+
+  const message = await prisma.message.findFirst({ where: { id, visitorId } });
+  if (!message) return res.status(404).json({ error: "Conversation not found" });
+
+  const updated = await prisma.message.update({ where: { id }, data: { status: "CLOSED" } });
+  getIO().to(conversationRoom(id)).emit(SocketEvents.CONVERSATION_CLOSED, { conversationId: id });
+
+  res.json({ message: updated });
+});
+
 // --- Everything below is for the admin dashboard ---
 messagesRouter.use(requireAuth);
 

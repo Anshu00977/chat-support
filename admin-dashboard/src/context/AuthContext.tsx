@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AdminDTO } from "@chat-support/shared";
 import { api } from "../api/client";
 
@@ -32,6 +32,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setAdmin(null);
   };
+
+  // localStorage is shared across every tab of this origin — if another tab logs
+  // in/out, this tab's socket would otherwise keep using a stale token forever.
+  // The "storage" event only fires in *other* tabs, so this keeps them all in sync.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== "admin_token" && e.key !== "admin_user") return;
+      setToken(localStorage.getItem("admin_token"));
+      const raw = localStorage.getItem("admin_user");
+      setAdmin(raw ? JSON.parse(raw) : null);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   const value = useMemo(() => ({ admin, token, login, logout }), [admin, token]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -58,7 +58,7 @@ export function AppsPage() {
 
   return (
     <div className="apps-page">
-      <h2>Connected Shopify stores</h2>
+      <h2>Connected Shopify apps</h2>
       <table className="admin-table">
         <thead>
           <tr>
