@@ -1,0 +1,23 @@
+{
+  "name": "chat-support-system",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "shared",
+    "backend",
+    "admin-dashboard",
+    "widget"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev -w backend",
+    "dev:dashboard": "npm run dev -w admin-dashboard",
+    "dev:widget": "npm run dev -w widget",
+    "build:shared": "npm run build -w shared",
+    "build:backend": "npm run build -w backend",
+    "build:dashboard": "npm run build -w admin-dashboard",
+    "build:widget": "npm run build -w widget",
+    "build": "npm run build:shared && npm run build:widget && npm run build:backend && npm run build:dashboard",
+    "prisma:generate": "npm run prisma:generate -w backend",
+    "prisma:migrate": "npm run prisma:migrate -w backend"
+  }
+}

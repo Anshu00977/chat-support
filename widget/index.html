@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Widget dev harness</title>
+  </head>
+  <body>
+    <h1>Storefront page (dev harness)</h1>
+    <p>This simulates a Shopify storefront page with the widget script tag injected.</p>
+    <script>
+      window.Shopify = { shop: "demo-shop.myshopify.com" };
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

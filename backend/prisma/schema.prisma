@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum AdminRole {
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum MessageStatus {
+  OPEN
+  BOT_HANDLED
+  NEEDS_HUMAN
+  CLAIMED
+  CLOSED
+}
+
+enum ReplySender {
+  ADMIN
+  SHOP
+  BOT
+}
+
+model Admin {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         AdminRole @default(ADMIN)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  assignedMessages Message[]      @relation("AssignedAdmin")
+  replies          MessageReply[]
+}
+
+/// One row per connected Shopify app/store this backend serves.
+model ShopifyApp {
+  id          Int      @id @default(autoincrement())
+  name        String
+  shop        String   @unique // e.g. some-store.myshopify.com
+  accessToken String   @db.Text // Shopify Admin API access token for this shop
+  scriptTagId String? // Shopify ScriptTag id once registered, null until installed
+  createdAt   DateTime @default(now())
+
+  keywords BotKeyword[]
+  messages Message[]
+}
+
+/// Per-app FAQ keyword -> answer entries used by the rule-based bot.
+model BotKeyword {
+  id        Int        @id @default(autoincrement())
+  appId     Int
+  app       ShopifyApp @relation(fields: [appId], references: [id], onDelete: Cascade)
+  keyword   String
+  answer    String     @db.Text
+  createdAt DateTime   @default(now())
+
+  @@index([appId])
+}
+
+model Message {
+  id              Int           @id @default(autoincrement())
+  appId           Int
+  app             ShopifyApp    @relation(fields: [appId], references: [id])
+  shop            String
+  visitorId       String // stable id the widget stores in localStorage to resume a thread
+  name            String?
+  email           String?
+  subject         String?
+  body            String        @db.Text
+  status          MessageStatus @default(OPEN)
+  assignedAdminId Int?
+  assignedAdmin   Admin?        @relation("AssignedAdmin", fields: [assignedAdminId], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  replies MessageReply[]
+
+  @@index([appId, status])
+  @@index([visitorId])
+}
+
+model MessageReply {
+  id          Int         @id @default(autoincrement())
+  messageId   Int
+  message     Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  sender      ReplySender
+  adminId     Int?
+  admin       Admin?      @relation(fields: [adminId], references: [id])
+  adminName   String?
+  body        String      @db.Text
+  attachments Json?
+  createdAt   DateTime    @default(now())
+
+  @@index([messageId])
+}
