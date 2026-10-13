@@ -31,6 +31,10 @@ export function createApp() {
   app.use("/", wishkeeperRouter);
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
+  app.get("/", (_req, res) => res.redirect("/admin/"));
+  // Catches people going straight to a dashboard route without the /admin
+  // prefix (e.g. bookmarked /login), instead of just 404ing on them.
+  app.get("/login", (_req, res) => res.redirect("/admin/login"));
 
   app.use("/api/auth", authRouter);
   app.use("/api/admins", adminsRouter);
