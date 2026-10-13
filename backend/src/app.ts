@@ -1,6 +1,8 @@
 import "express-async-errors";
 import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 import { env } from "./config/env";
 import { authRouter } from "./routes/auth.routes";
 import { adminsRouter } from "./routes/admins.routes";
@@ -35,6 +37,14 @@ export function createApp() {
   app.use("/api/apps", appsRouter);
   app.use("/api/messages", messagesRouter);
   app.use("/api/uploads", uploadsRouter);
+
+  // Admin dashboard SPA, served at /admin (the backend's own domain, no
+  // separate subdomain/deploy needed). VITE_API_URL is baked in at build
+  // time to this same origin, so the dashboard's API/socket calls are
+  // same-origin once served from here.
+  const dashboardDist = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../admin-dashboard/dist");
+  app.use("/admin", express.static(dashboardDist));
+  app.get(/^\/admin(\/.*)?$/, (_req, res) => res.sendFile(path.join(dashboardDist, "index.html")));
 
   // Centralized error handler: express-async-errors forwards any rejected
   // promise from an async route handler here instead of crashing the process.
