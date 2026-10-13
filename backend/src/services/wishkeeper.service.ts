@@ -333,6 +333,17 @@ export async function forwardAdminTyping(conversationId: number) {
   await pushToWishkeeper({ shop, type: "typing" });
 }
 
+/**
+ * Marks a WishKeeper merchant's thread closed (or reopens it) in WishKeeper's
+ * own database. The merchant's widget polls that same row, so this is all
+ * that's needed for the close action to reach their open chat panel.
+ */
+export async function setWishkeeperThreadClosed(shop: string, closed: boolean) {
+  if (!wkDb) return;
+  await wkDb.$executeRaw`
+    UPDATE SupportThread SET closedAt = ${closed ? new Date() : null} WHERE shop = ${shop}`;
+}
+
 export async function findWishkeeperConversationId(shop: string): Promise<number | null> {
   const conversation = await prisma.message.findFirst({
     where: { source: "WISHKEEPER", shop },

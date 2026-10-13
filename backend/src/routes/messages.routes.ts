@@ -5,6 +5,7 @@ import { requireAuth } from "../middleware/auth";
 import { matchBotKeyword } from "../services/bot.service";
 import { notifyAdminsNeedsHuman } from "../services/mail.service";
 import { getIO } from "../socket/ioInstance";
+import { setWishkeeperThreadClosed } from "../services/wishkeeper.service";
 
 export const messagesRouter = Router();
 
@@ -189,6 +190,10 @@ messagesRouter.post("/:id/close", async (req, res) => {
   const updated = await prisma.message.update({ where: { id }, data: { status: "CLOSED" } });
 
   getIO().to(conversationRoom(id)).emit(SocketEvents.CONVERSATION_CLOSED, { conversationId: id });
+
+  if (updated.source === "WISHKEEPER") {
+    void setWishkeeperThreadClosed(updated.shop, true);
+  }
 
   res.json({ message: updated });
 });
