@@ -13,7 +13,7 @@ export default function App() {
   return (
     <AuthProvider>
       <SocketProvider>
-        <BrowserRouter>
+        <BrowserRouter basename={import.meta.env.PROD ? "/admin" : "/"}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route
