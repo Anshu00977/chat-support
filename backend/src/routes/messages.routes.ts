@@ -78,7 +78,7 @@ messagesRouter.get("/:id/history", async (req, res) => {
   if (!visitorId) return res.status(400).json({ error: "visitorId is required" });
 
   const message = await prisma.message.findFirst({
-    where: { id, visitorId },
+    where: { id, visitorId, source: "WIDGET" },
     include: replyInclude,
   });
   if (!message) return res.status(404).json({ error: "Conversation not found" });
@@ -92,7 +92,7 @@ messagesRouter.post("/:id/close-by-visitor", async (req, res) => {
   const { visitorId } = req.body as { visitorId?: string };
   if (!visitorId) return res.status(400).json({ error: "visitorId is required" });
 
-  const message = await prisma.message.findFirst({ where: { id, visitorId } });
+  const message = await prisma.message.findFirst({ where: { id, visitorId, source: "WIDGET" } });
   if (!message) return res.status(404).json({ error: "Conversation not found" });
 
   const updated = await prisma.message.update({ where: { id }, data: { status: "CLOSED" } });
@@ -105,13 +105,14 @@ messagesRouter.post("/:id/close-by-visitor", async (req, res) => {
 messagesRouter.use(requireAuth);
 
 messagesRouter.get("/", async (req, res) => {
-  const { appId, status, mine } = req.query as { appId?: string; status?: string; mine?: string };
+  const { appId, status, mine, source } = req.query as { appId?: string; status?: string; mine?: string; source?: string };
 
   const messages = await prisma.message.findMany({
     where: {
       appId: appId ? Number(appId) : undefined,
       status: status ? (status as any) : undefined,
       assignedAdminId: mine === "true" ? req.admin!.id : undefined,
+      source: source === "WIDGET" || source === "WISHKEEPER" ? source : undefined,
     },
     include: {
       assignedAdmin: { select: { id: true, name: true } },

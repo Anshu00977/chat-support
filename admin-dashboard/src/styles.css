@@ -132,6 +132,9 @@ select:focus, input:focus, textarea:focus {
 .badge-needs_human { background: var(--color-warning-bg); color: var(--color-warning); }
 .badge-bot_handled { background: var(--color-success-bg); color: var(--color-success); }
 .badge-closed { background: var(--color-neutral-bg); color: var(--color-text-muted); }
+/* WishKeeper gold, matching the merchant-side widget */
+.badge-wishkeeper { background: #f9f1e1; color: #8a6a1e; }
+.conversation-badges { display: flex; gap: 0.35rem; }
 
 /* --- Inbox --- */
 .page-header { margin-bottom: 1.4rem; }

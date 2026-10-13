@@ -199,6 +199,7 @@ export function ConversationPage() {
 
   const isMine = conversation.assignedAdmin?.id === admin?.id;
   const isClosed = conversation.status === "CLOSED";
+  const customerLabel = conversation.source === "WISHKEEPER" ? "Merchant" : "Customer";
 
   return (
     <div className="conversation-page">
@@ -206,7 +207,7 @@ export function ConversationPage() {
         <div>
           <h2>{conversation.name || conversation.email || "Anonymous visitor"}</h2>
           <p className="muted">
-            {conversation.shop} · <span className={`badge badge-${conversation.status.toLowerCase()}`}>{conversation.status.replace("_", " ")}</span>
+            {conversation.source === "WISHKEEPER" && <span className="badge badge-wishkeeper">WishKeeper</span>} {conversation.shop} · <span className={`badge badge-${conversation.status.toLowerCase()}`}>{conversation.status.replace("_", " ")}</span>
             {conversation.assignedAdmin && ` · assigned to ${conversation.assignedAdmin.name}`}
             {" · "}
             <span className={`conn-indicator ${connected ? "online" : "offline"}`}>
@@ -246,12 +247,12 @@ export function ConversationPage() {
         <div className="message-list">
           {conversation.replies.map((r) => (
             <div key={r.id} className={`bubble bubble-${r.sender.toLowerCase()}`}>
-              <div className="bubble-meta">{r.sender === "ADMIN" ? r.adminName ?? "Admin" : r.sender === "BOT" ? "Bot" : "Customer"}</div>
+              <div className="bubble-meta">{r.sender === "ADMIN" ? r.adminName ?? "Admin" : r.sender === "BOT" ? "Bot" : customerLabel}</div>
               {r.body && <div className="bubble-body">{r.body}</div>}
               {r.attachments && r.attachments.length > 0 && <AttachmentList attachments={r.attachments} />}
             </div>
           ))}
-          {customerTyping && <div className="typing-indicator">Customer is typing…</div>}
+          {customerTyping && <div className="typing-indicator">{customerLabel} is typing…</div>}
           <div ref={bottomRef} />
         </div>
 

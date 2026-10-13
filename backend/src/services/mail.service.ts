@@ -16,6 +16,8 @@ export async function notifyAdminsNeedsHuman(params: {
   name: string | null;
   email: string | null;
   body: string;
+  /** First line of the email; defaults to the widget bot-miss wording. */
+  intro?: string;
 }) {
   const admins = await prisma.admin.findMany({
     where: { active: true },
@@ -25,7 +27,7 @@ export async function notifyAdminsNeedsHuman(params: {
 
   const subject = `New support message needs a human reply (${params.shop})`;
   const text = [
-    `A customer message from ${params.shop} could not be answered by the bot.`,
+    params.intro ?? `A customer message from ${params.shop} could not be answered by the bot.`,
     `From: ${params.name ?? "Anonymous"} ${params.email ? `<${params.email}>` : ""}`,
     "",
     params.body,

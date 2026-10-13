@@ -11,6 +11,9 @@ interface AppOption {
   shop: string;
 }
 
+// Value of the "app" filter that selects WishKeeper merchant threads, which aren't tied to a widget app.
+const WISHKEEPER_FILTER = "wishkeeper";
+
 const STATUS_LABELS: Record<string, string> = {
   OPEN: "Open",
   BOT_HANDLED: "Bot handled",
@@ -33,7 +36,8 @@ export function InboxPage() {
     setLoading(true);
     const res = await api.get("/messages", {
       params: {
-        appId: appId || undefined,
+        appId: appId && appId !== WISHKEEPER_FILTER ? appId : undefined,
+        source: appId === WISHKEEPER_FILTER ? "WISHKEEPER" : undefined,
         status: status || undefined,
         mine: mineOnly ? "true" : undefined,
       },
@@ -74,6 +78,7 @@ export function InboxPage() {
       <div className="inbox-filters">
         <select value={appId} onChange={(e) => setAppId(e.target.value)}>
           <option value="">All apps</option>
+          <option value={WISHKEEPER_FILTER}>WishKeeper merchants</option>
           {apps.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name} ({a.shop})
@@ -105,7 +110,10 @@ export function InboxPage() {
               <Link to={`/conversations/${m.id}`} className="conversation-row">
                 <div className="conversation-row-top">
                   <span className="conversation-name">{m.name || m.email || "Anonymous visitor"}</span>
-                  <span className={`badge badge-${m.status.toLowerCase()}`}>{STATUS_LABELS[m.status]}</span>
+                  <span className="conversation-badges">
+                    {m.source === "WISHKEEPER" && <span className="badge badge-wishkeeper">WishKeeper</span>}
+                    <span className={`badge badge-${m.status.toLowerCase()}`}>{STATUS_LABELS[m.status]}</span>
+                  </span>
                 </div>
                 <div className="conversation-row-bottom">
                   <span className="conversation-shop">{m.shop}</span>

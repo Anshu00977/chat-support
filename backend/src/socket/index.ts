@@ -6,6 +6,7 @@ import { prisma } from "../prisma";
 import { verifyAdminToken } from "../utils/jwt";
 import { setIO } from "./ioInstance";
 import { setupTypingHandlers } from "./typing";
+import { sendWishkeeperAdminReply } from "../services/wishkeeper.service";
 
 interface SocketData {
   adminId?: number;
@@ -56,8 +57,13 @@ export function initSocket(httpServer: HttpServer): Server {
     socket.on(
       SocketEvents.JOIN_CONVERSATION,
       withAck(async ({ conversationId }: { conversationId: number }) => {
-        const exists = await prisma.message.findUnique({ where: { id: conversationId }, select: { id: true } });
-        if (!exists) throw new Error("Conversation not found");
+        const conversation = await prisma.message.findUnique({
+          where: { id: conversationId },
+          select: { id: true, source: true },
+        });
+        if (!conversation) throw new Error("Conversation not found");
+        // Merchant support threads are only ever viewed from the dashboard.
+        if (conversation.source === "WISHKEEPER" && !data.adminId) throw new Error("Conversation not found");
         socket.join(conversationRoom(conversationId));
         return { conversationId };
       })
@@ -75,6 +81,25 @@ export function initSocket(httpServer: HttpServer): Server {
         }) => {
           const { conversationId, body, sender, adminName, attachments } = payload;
           if (!body?.trim() && !attachments?.length) throw new Error("Message is empty");
+
+          const conversation = await prisma.message.findUnique({
+            where: { id: conversationId },
+            select: { id: true, source: true, shop: true, externalThreadId: true },
+          });
+          if (!conversation) throw new Error("Conversation not found");
+
+          // WishKeeper merchants write from their own app, so the only valid
+          // sender here is a logged-in admin; the reply goes to WishKeeper's DB.
+          if (conversation.source === "WISHKEEPER") {
+            if (sender !== "ADMIN" || !data.adminId) throw new Error("Only admins can reply to WishKeeper conversations");
+            const replies = await sendWishkeeperAdminReply({
+              conversation,
+              admin: { id: data.adminId, name: adminName ?? null },
+              body: body ?? "",
+              attachments: attachments ?? [],
+            });
+            return replies[replies.length - 1];
+          }
 
           const reply = await prisma.messageReply.create({
             data: {

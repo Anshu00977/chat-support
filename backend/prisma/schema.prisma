@@ -20,6 +20,13 @@ enum MessageStatus {
   CLOSED
 }
 
+/// Where a conversation came from: the storefront widget, or a WishKeeper
+/// merchant's in-admin support chat (synced from the WishKeeper app's own DB).
+enum MessageSource {
+  WIDGET
+  WISHKEEPER
+}
+
 enum ReplySender {
   ADMIN
   SHOP
@@ -27,13 +34,13 @@ enum ReplySender {
 }
 
 model Admin {
-  id           Int      @id @default(autoincrement())
+  id           Int       @id @default(autoincrement())
   name         String
-  email        String   @unique
+  email        String    @unique
   passwordHash String
   role         AdminRole @default(ADMIN)
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
 
   assignedMessages Message[]      @relation("AssignedAdmin")
   replies          MessageReply[]
@@ -65,20 +72,22 @@ model BotKeyword {
 }
 
 model Message {
-  id              Int           @id @default(autoincrement())
-  appId           Int
-  app             ShopifyApp    @relation(fields: [appId], references: [id])
-  shop            String
-  visitorId       String // stable id the widget stores in localStorage to resume a thread
-  name            String?
-  email           String?
-  subject         String?
-  body            String        @db.Text
-  status          MessageStatus @default(OPEN)
-  assignedAdminId Int?
-  assignedAdmin   Admin?        @relation("AssignedAdmin", fields: [assignedAdminId], references: [id])
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id               Int           @id @default(autoincrement())
+  appId            Int? // null for WISHKEEPER conversations, which aren't tied to a widget store
+  app              ShopifyApp?   @relation(fields: [appId], references: [id], onDelete: Restrict)
+  source           MessageSource @default(WIDGET)
+  externalThreadId String?       @unique // WishKeeper SupportThread.id, for WISHKEEPER conversations
+  shop             String
+  visitorId        String // stable id the widget stores in localStorage to resume a thread
+  name             String?
+  email            String?
+  subject          String?
+  body             String        @db.Text
+  status           MessageStatus @default(OPEN)
+  assignedAdminId  Int?
+  assignedAdmin    Admin?        @relation("AssignedAdmin", fields: [assignedAdminId], references: [id])
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   replies MessageReply[]
 
@@ -96,6 +105,7 @@ model MessageReply {
   adminName   String?
   body        String      @db.Text
   attachments Json?
+  externalId  String?     @unique // WishKeeper SupportMessage.id, used to de-duplicate synced messages
   createdAt   DateTime    @default(now())
 
   @@index([messageId])

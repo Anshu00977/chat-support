@@ -9,6 +9,9 @@ export type MessageStatus =
 
 export type ReplySender = "ADMIN" | "SHOP" | "BOT";
 
+/** WIDGET = storefront customer chat; WISHKEEPER = a WishKeeper merchant's in-admin support chat. */
+export type MessageSource = "WIDGET" | "WISHKEEPER";
+
 export interface AdminDTO {
   id: number;
   name: string;
@@ -38,7 +41,8 @@ export interface MessageReplyDTO {
 
 export interface MessageDTO {
   id: number;
-  appId: number;
+  appId: number | null;
+  source: MessageSource;
   shop: string;
   name: string | null;
   email: string | null;

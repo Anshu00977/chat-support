@@ -8,6 +8,30 @@ function required(name: string): string {
   return value;
 }
 
+export interface SeedApp {
+  name: string;
+  shop: string;
+  accessToken: string;
+}
+
+function parseSeedApps(): SeedApp[] {
+  const raw = process.env.SEED_APPS;
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) throw new Error("SEED_APPS must be a JSON array");
+    return parsed.map((entry, i) => {
+      if (!entry.name || !entry.shop || !entry.accessToken) {
+        throw new Error(`SEED_APPS[${i}] is missing name, shop, or accessToken`);
+      }
+      return { name: entry.name, shop: entry.shop, accessToken: entry.accessToken };
+    });
+  } catch (err) {
+    console.error("Failed to parse SEED_APPS — skipping app auto-registration:", err);
+    return [];
+  }
+}
+
 export const env = {
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: required("DATABASE_URL"),
@@ -26,5 +50,17 @@ export const env = {
     email: process.env.BOOTSTRAP_SUPER_ADMIN_EMAIL,
     password: process.env.BOOTSTRAP_SUPER_ADMIN_PASSWORD,
     name: process.env.BOOTSTRAP_SUPER_ADMIN_NAME ?? "Owner",
+  },
+  seedApps: parseSeedApps(),
+  /**
+   * WishKeeper merchant support chat. Enabled only when the DB URL and shared
+   * secret are both set. appUrl may also be updated at runtime by WishKeeper's
+   * dev server via POST /internal/register-url (see wishkeeper.service.ts).
+   */
+  wishkeeper: {
+    databaseUrl: process.env.WISHKEEPER_DATABASE_URL,
+    appUrl: (process.env.WISHKEEPER_APP_URL ?? "").replace(/\/$/, ""),
+    internalSecret: process.env.SUPPORT_INTERNAL_SECRET,
+    adminDisplayName: process.env.WISHKEEPER_ADMIN_DISPLAY_NAME ?? "WishKeeper Support",
   },
 };

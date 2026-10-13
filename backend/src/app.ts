@@ -8,6 +8,7 @@ import { appsRouter } from "./routes/apps.routes";
 import { messagesRouter } from "./routes/messages.routes";
 import { widgetRouter } from "./routes/widget.routes";
 import { uploadsRouter, UPLOADS_DIR } from "./routes/uploads.routes";
+import { wishkeeperRouter } from "./routes/wishkeeper.routes";
 
 export function createApp() {
   const app = express();
@@ -23,6 +24,9 @@ export function createApp() {
   // Widget bundle is served from the root, matching the ScriptTag src (/widget.js).
   app.use("/", widgetRouter);
   app.use("/uploads", express.static(UPLOADS_DIR));
+
+  // Server-to-server contract with the WishKeeper Shopify app (/internal/*) + its attachment links.
+  app.use("/", wishkeeperRouter);
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
 

@@ -72,3 +72,26 @@ The backend runs via `tsx` in both dev and prod (`npm start` in
 `backend/`) rather than a `tsc`-emitted `dist/`, since the whole workspace is
 ESM and this sidesteps Node's stricter ESM extension-resolution rules
 without needing a bundler for the backend.
+
+## WishKeeper merchant support
+
+This backend can also act as the support dashboard for the **WishKeeper**
+Shopify app, replacing its old standalone admin dashboard. Merchants keep
+using WishKeeper's built-in chat bubble inside their Shopify admin; their
+threads appear in this inbox (filter **All apps → WishKeeper merchants**)
+with claim, transfer, close and email alerts like any other conversation.
+
+Setup:
+
+1. In `backend/.env`, set `WISHKEEPER_DATABASE_URL`, `SUPPORT_INTERNAL_SECRET`
+   and `WISHKEEPER_APP_URL` (see `backend/.env.example`), then run
+   `npm run prisma:migrate`.
+2. In WishKeeper's `.env`, point `ADMIN_DASHBOARD_URL` at this backend
+   (e.g. `http://localhost:4000`). Nothing else changes on that side.
+
+How it works: WishKeeper calls `POST /internal/notify` here when a merchant
+writes or types; admin replies are written straight into WishKeeper's
+`SupportMessage` table and pushed to the merchant's open widget via its
+`/app/support/internal-notify`. On every boot, any WishKeeper messages not yet
+in this inbox (e.g. sent while the backend was down) are imported. See
+`backend/src/services/wishkeeper.service.ts`.
