@@ -7,7 +7,7 @@ export type MessageStatus =
   | "CLAIMED"
   | "CLOSED";
 
-export type ReplySender = "ADMIN" | "SHOP" | "BOT";
+export type ReplySender = "ADMIN" | "SHOP" | "BOT" | "SYSTEM";
 
 /** WIDGET = storefront customer chat; WISHKEEPER = a WishKeeper merchant's in-admin support chat. */
 export type MessageSource = "WIDGET" | "WISHKEEPER";

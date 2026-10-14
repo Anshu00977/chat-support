@@ -361,6 +361,29 @@ export async function setWishkeeperThreadClosed(shop: string, closed: boolean) {
     UPDATE SupportThread SET closedAt = ${closed ? new Date() : null} WHERE shop = ${shop}`;
 }
 
+/**
+ * Marks where a merchant clicked "Start new chat" on WishKeeper. The mirrored
+ * history here isn't trimmed (unlike the merchant's own widget, which hides
+ * it) -- this just drops a divider row so the dashboard reads clearly instead
+ * of looking like one continuous resumed conversation.
+ */
+export async function recordWishkeeperReset(shop: string) {
+  const conversationId = await findWishkeeperConversationId(shop);
+  if (!conversationId) return;
+
+  const reply = await prisma.messageReply.create({
+    data: {
+      messageId: conversationId,
+      sender: "SYSTEM",
+      body: "Merchant started a new conversation",
+    },
+  });
+  await prisma.message.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });
+
+  const io = getIO();
+  io.to([conversationRoom(conversationId), ADMINS_ROOM]).emit(SocketEvents.MESSAGE_RECEIVED, reply);
+}
+
 export async function findWishkeeperConversationId(shop: string): Promise<number | null> {
   const conversation = await prisma.message.findFirst({
     where: { source: "WISHKEEPER", shop },

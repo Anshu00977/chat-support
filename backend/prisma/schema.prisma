@@ -31,6 +31,9 @@ enum ReplySender {
   ADMIN
   SHOP
   BOT
+  // Not a chat participant -- a divider row (e.g. "new conversation
+  // started"), rendered without a bubble in the dashboard.
+  SYSTEM
 }
 
 model Admin {

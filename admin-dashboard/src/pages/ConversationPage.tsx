@@ -245,13 +245,19 @@ export function ConversationPage() {
         {dragging && !isClosed && <div className="drop-overlay">Drop to attach</div>}
 
         <div className="message-list">
-          {conversation.replies.map((r) => (
-            <div key={r.id} className={`bubble bubble-${r.sender.toLowerCase()}`}>
-              <div className="bubble-meta">{r.sender === "ADMIN" ? r.adminName ?? "Admin" : r.sender === "BOT" ? "Bot" : customerLabel}</div>
-              {r.body && <div className="bubble-body">{r.body}</div>}
-              {r.attachments && r.attachments.length > 0 && <AttachmentList attachments={r.attachments} />}
-            </div>
-          ))}
+          {conversation.replies.map((r) =>
+            r.sender === "SYSTEM" ? (
+              <div key={r.id} className="system-divider">
+                <span>{r.body}</span>
+              </div>
+            ) : (
+              <div key={r.id} className={`bubble bubble-${r.sender.toLowerCase()}`}>
+                <div className="bubble-meta">{r.sender === "ADMIN" ? r.adminName ?? "Admin" : r.sender === "BOT" ? "Bot" : customerLabel}</div>
+                {r.body && <div className="bubble-body">{r.body}</div>}
+                {r.attachments && r.attachments.length > 0 && <AttachmentList attachments={r.attachments} />}
+              </div>
+            )
+          )}
           {customerTyping && <div className="typing-indicator">{customerLabel} is typing…</div>}
           <div ref={bottomRef} />
         </div>

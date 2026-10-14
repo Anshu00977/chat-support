@@ -1,0 +1,1 @@
+ALTER TABLE `MessageReply` MODIFY COLUMN `sender` ENUM('ADMIN', 'SHOP', 'BOT', 'SYSTEM') NOT NULL;

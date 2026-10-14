@@ -6,6 +6,7 @@ import {
   findWishkeeperConversationId,
   getWishkeeperAppUrl,
   ingestWishkeeperMessage,
+  recordWishkeeperReset,
   setWishkeeperAppUrl,
   wishkeeperEnabled,
   type WkMessage,
@@ -36,6 +37,8 @@ wishkeeperRouter.post("/internal/notify", requireInternalSecret, async (req, res
   } else if (type === "typing") {
     const conversationId = await findWishkeeperConversationId(shop);
     if (conversationId) broadcastTyping(getIO(), conversationId, "SHOP");
+  } else if (type === "reset") {
+    await recordWishkeeperReset(shop);
   }
   // "seen" (merchant opened the widget) has no dashboard UI yet — accepted and ignored.
 
