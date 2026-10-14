@@ -86,6 +86,16 @@ function isUniqueViolation(err: unknown) {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
 }
 
+/** "convobridge.myshopify.com" -> "Convobridge" -- shown in the inbox instead of the raw domain. */
+function prettyShopName(shop: string) {
+  const base = shop.replace(/\.myshopify\.com$/, "");
+  return base
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 async function findOrCreateConversation(shop: string, first: WkMessage) {
   const existing = await prisma.message.findUnique({ where: { externalThreadId: first.threadId } });
   if (existing) return { conversation: existing, isNew: false };
@@ -97,7 +107,7 @@ async function findOrCreateConversation(shop: string, first: WkMessage) {
         externalThreadId: first.threadId,
         shop,
         visitorId: `wishkeeper:${shop}`,
-        name: shop,
+        name: prettyShopName(shop),
         body: first.body || first.attachmentName || "(attachment)",
         status: first.sender === "admin" ? "OPEN" : "NEEDS_HUMAN",
       },
@@ -330,7 +340,14 @@ export async function forwardAdminTyping(conversationId: number) {
   const now = Date.now();
   if (now - (lastTypingPush.get(conversationId) ?? 0) < TYPING_PUSH_INTERVAL_MS) return;
   lastTypingPush.set(conversationId, now);
-  await pushToWishkeeper({ shop, type: "typing" });
+
+  // pushToWishkeeper's HTTP push only reaches a listener on a live
+  // WebSocket/SSE channel WishKeeper no longer runs in production (it
+  // polls instead), so the timestamp written here is what its widget
+  // actually reads to show "typing...".
+  if (wkDb) {
+    await wkDb.$executeRaw`UPDATE SupportThread SET adminTypingAt = ${new Date()} WHERE shop = ${shop}`;
+  }
 }
 
 /**
