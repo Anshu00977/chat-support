@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
 import { env } from "../config/env";
-import { registerWidgetScriptTag } from "../services/shopify.service";
+import { installWidget } from "../services/shopify.service";
 
 /**
  * Auto-registers Shopify apps declared in SEED_APPS (backend/.env) instead of
@@ -19,14 +19,14 @@ export async function seedAppsFromEnv() {
     });
 
     const tokenChanged = existing && existing.accessToken !== seed.accessToken;
-    if (!app.scriptTagId || tokenChanged) {
+    if (!app.installMethod || tokenChanged) {
       try {
-        const scriptTagId = String(await registerWidgetScriptTag(seed.shop, seed.accessToken));
-        await prisma.shopifyApp.update({ where: { id: app.id }, data: { scriptTagId } });
-        console.log(`Seeded app "${seed.name}" (${seed.shop}) — widget ScriptTag registered.`);
+        const { scriptTagId, installMethod } = await installWidget(seed.shop, seed.accessToken);
+        await prisma.shopifyApp.update({ where: { id: app.id }, data: { scriptTagId, installMethod } });
+        console.log(`Seeded app "${seed.name}" (${seed.shop}) — widget installed via ${installMethod}.`);
       } catch (err) {
         console.warn(
-          `Seeded app "${seed.name}" (${seed.shop}) but ScriptTag registration failed — retry from the dashboard's Apps page. Reason:`,
+          `Seeded app "${seed.name}" (${seed.shop}) but widget install failed — retry from the dashboard's Apps page. Reason:`,
           err instanceof Error ? err.message : err
         );
       }

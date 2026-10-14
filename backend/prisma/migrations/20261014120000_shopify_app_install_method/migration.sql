@@ -1,0 +1,1 @@
+ALTER TABLE `ShopifyApp` ADD COLUMN `installMethod` VARCHAR(191) NULL;

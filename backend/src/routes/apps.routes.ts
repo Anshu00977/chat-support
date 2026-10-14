@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
-import { registerWidgetScriptTag, removeWidgetScriptTag } from "../services/shopify.service";
+import { installWidget, removeWidgetFromThemeAsset, removeWidgetScriptTag } from "../services/shopify.service";
 
 export const appsRouter = Router();
 
@@ -29,20 +29,22 @@ appsRouter.post("/install", async (req, res) => {
     create: { shop, accessToken, name: name ?? shop },
   });
 
-  let scriptTagId = app.scriptTagId;
-  if (!scriptTagId) {
-    scriptTagId = String(await registerWidgetScriptTag(shop, accessToken));
-    await prisma.shopifyApp.update({ where: { id: app.id }, data: { scriptTagId } });
+  let { scriptTagId, installMethod } = app;
+  if (!scriptTagId && !installMethod) {
+    const result = await installWidget(shop, accessToken);
+    scriptTagId = result.scriptTagId;
+    installMethod = result.installMethod;
+    await prisma.shopifyApp.update({ where: { id: app.id }, data: { scriptTagId, installMethod } });
   }
 
-  res.status(201).json({ appId: app.id, shop: app.shop, scriptTagId });
+  res.status(201).json({ appId: app.id, shop: app.shop, scriptTagId, installMethod });
 });
 
 appsRouter.use(requireAuth);
 
 appsRouter.get("/", async (_req, res) => {
   const apps = await prisma.shopifyApp.findMany({
-    select: { id: true, name: true, shop: true, scriptTagId: true, createdAt: true },
+    select: { id: true, name: true, shop: true, scriptTagId: true, installMethod: true, createdAt: true },
     orderBy: { createdAt: "asc" },
   });
   res.json({ apps });
@@ -54,19 +56,23 @@ appsRouter.post("/:id/scripttag", requireRole("SUPER_ADMIN"), async (req, res) =
   const app = await prisma.shopifyApp.findUnique({ where: { id } });
   if (!app) return res.status(404).json({ error: "App not found" });
 
-  const scriptTagId = String(await registerWidgetScriptTag(app.shop, app.accessToken));
-  await prisma.shopifyApp.update({ where: { id }, data: { scriptTagId } });
-  res.json({ scriptTagId });
+  const { scriptTagId, installMethod } = await installWidget(app.shop, app.accessToken);
+  await prisma.shopifyApp.update({ where: { id }, data: { scriptTagId, installMethod } });
+  res.json({ scriptTagId, installMethod });
 });
 
 appsRouter.delete("/:id/scripttag", requireRole("SUPER_ADMIN"), async (req, res) => {
   const id = Number(req.params.id);
   const app = await prisma.shopifyApp.findUnique({ where: { id } });
   if (!app) return res.status(404).json({ error: "App not found" });
-  if (!app.scriptTagId) return res.status(400).json({ error: "No ScriptTag registered" });
+  if (!app.installMethod) return res.status(400).json({ error: "Widget not installed" });
 
-  await removeWidgetScriptTag(app.shop, app.accessToken, Number(app.scriptTagId));
-  await prisma.shopifyApp.update({ where: { id }, data: { scriptTagId: null } });
+  if (app.installMethod === "theme") {
+    await removeWidgetFromThemeAsset(app.shop, app.accessToken);
+  } else if (app.scriptTagId) {
+    await removeWidgetScriptTag(app.shop, app.accessToken, Number(app.scriptTagId));
+  }
+  await prisma.shopifyApp.update({ where: { id }, data: { scriptTagId: null, installMethod: null } });
   res.status(204).send();
 });
 

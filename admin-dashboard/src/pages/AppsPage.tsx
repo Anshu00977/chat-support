@@ -7,6 +7,7 @@ interface ShopifyAppRow {
   name: string;
   shop: string;
   scriptTagId: string | null;
+  installMethod: "scripttag" | "theme" | null;
 }
 
 interface BotKeyword {
@@ -73,10 +74,16 @@ export function AppsPage() {
             <tr key={a.id}>
               <td>{a.name}</td>
               <td>{a.shop}</td>
-              <td>{a.scriptTagId ? "Widget live" : "Not installed"}</td>
+              <td>
+                {a.installMethod === "theme"
+                  ? "Widget live (theme)"
+                  : a.installMethod === "scripttag"
+                    ? "Widget live (script tag)"
+                    : "Not installed"}
+              </td>
               <td>
                 <button onClick={() => setSelectedAppId(a.id)}>Manage bot</button>
-                {admin?.role === "SUPER_ADMIN" && !a.scriptTagId && (
+                {admin?.role === "SUPER_ADMIN" && !a.installMethod && (
                   <button onClick={() => registerScriptTag(a.id)}>Install widget</button>
                 )}
               </td>
