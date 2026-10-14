@@ -97,11 +97,40 @@ async function getThemeLiquid(shop: string, accessToken: string, themeId: number
   return data.asset.value;
 }
 
+// Confirmed live (2026-10-14): the REST PUT .../assets.json write path 404s
+// even with a valid write_themes token, while the same GET still works fine
+// -- Shopify has evidently restricted the REST write side the same way it
+// restricted ScriptTags, without a corresponding error message pointing
+// anywhere. The themeFilesUpsert GraphQL mutation is the current supported
+// replacement for writing theme files and isn't affected.
 async function putThemeLiquid(shop: string, accessToken: string, themeId: number, value: string): Promise<void> {
-  await shopifyFetch(shop, accessToken, `/themes/${themeId}/assets.json`, {
-    method: "PUT",
-    body: JSON.stringify({ asset: { key: "layout/theme.liquid", value } }),
-  });
+  const query = `
+    mutation ThemeFilesUpsert($themeId: ID!, $files: [OnlineStoreThemeFilesUpsertFileInput!]!) {
+      themeFilesUpsert(themeId: $themeId, files: $files) {
+        upsertedThemeFiles { filename }
+        userErrors { field message }
+      }
+    }`;
+  const variables = {
+    themeId: `gid://shopify/OnlineStoreTheme/${themeId}`,
+    files: [{ filename: "layout/theme.liquid", body: { type: "TEXT", value } }],
+  };
+
+  const data = (await shopifyFetch(shop, accessToken, "/graphql.json", {
+    method: "POST",
+    body: JSON.stringify({ query, variables }),
+  })) as {
+    data?: { themeFilesUpsert: { userErrors: Array<{ field: string[]; message: string }> } };
+    errors?: Array<{ message: string }>;
+  };
+
+  if (data.errors?.length) {
+    throw new Error(`themeFilesUpsert GraphQL error: ${data.errors.map((e) => e.message).join("; ")}`);
+  }
+  const userErrors = data.data?.themeFilesUpsert.userErrors ?? [];
+  if (userErrors.length) {
+    throw new Error(`themeFilesUpsert failed: ${userErrors.map((e) => e.message).join("; ")}`);
+  }
 }
 
 /** Injects the widget script tag directly into the live theme, idempotently. */
