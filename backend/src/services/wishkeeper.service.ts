@@ -271,7 +271,7 @@ export async function sendWishkeeperAdminReply(params: {
     ),
     wkDb.$executeRaw`
       UPDATE SupportThread
-      SET shopUnreadCount = shopUnreadCount + ${wkMessages.length}, updatedAt = ${new Date()}
+      SET shopUnreadCount = shopUnreadCount + ${wkMessages.length}, updatedAt = ${new Date()}, closedAt = NULL
       WHERE id = ${threadId}`,
   ]);
 
