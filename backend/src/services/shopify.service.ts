@@ -52,13 +52,14 @@ export async function removeWidgetScriptTag(shop: string, accessToken: string, s
 // --- Fallback for apps that can no longer use ScriptTags at all ---------
 // Shopify rejects ScriptTag creation for every app created after its cutoff
 // date ("This app can't create or update script tags. Use theme app
-// extensions instead."). A real theme app extension would need its own
-// extension code deployed per connecting app, which defeats the "one API
-// call, zero code" promise this install endpoint makes. Writing the widget
-// script directly into the active theme's layout file via the (still fully
-// supported, not deprecated) Theme Assets API gets the same zero-code-change
-// result for the connecting app, as long as its access token has the
-// write_themes scope.
+// extensions instead."). Writing the widget script directly into the theme
+// was tried next (both REST PUT and the themeFilesUpsert GraphQL mutation)
+// but both are gated behind a write_themes-plus-Shopify-granted-exemption
+// requirement -- confirmed live 2026-10-14, not something any amount of
+// retrying or code changes gets around. installWidget() below now just
+// returns a copy-paste snippet instead when ScriptTag isn't available;
+// these two functions are kept for the rare app that already holds that
+// exemption (e.g. from before Shopify locked this down).
 
 const WIDGET_MARKER_START = "<!-- chat-support-widget:start -->";
 const WIDGET_MARKER_END = "<!-- chat-support-widget:end -->";
@@ -160,24 +161,30 @@ export async function removeWidgetFromThemeAsset(shop: string, accessToken: stri
   await putThemeLiquid(shop, accessToken, themeId, updated);
 }
 
+/** The install snippet to paste once into the theme, manual-install fallback. */
+export function buildWidgetSnippet(shop: string): string {
+  const src = `${env.backendPublicUrl}/widget.js`;
+  return `<script defer src="${src}" data-shop="${shop}"></script>`;
+}
+
 /**
  * Installs the widget by whichever method actually works for this app.
- * Shopify blocks ScriptTag creation outright for every app created after its
- * cutoff date -- that's the common case now -- so this tries it first and
- * silently falls back to writing straight into the theme's layout file,
- * which isn't deprecated and needs no extension of its own. Either way the
- * connecting app's own code never has to change.
+ * ScriptTag creation is blocked for every app created after Shopify's
+ * cutoff date -- the common case now -- and direct theme-file writes
+ * (REST or GraphQL) are gated behind an exemption Shopify grants per app,
+ * not something obtainable here. So the fallback is a one-time manual
+ * snippet paste into the theme instead of a second silent API attempt that
+ * would just fail the same way.
  */
 export async function installWidget(
   shop: string,
   accessToken: string
-): Promise<{ scriptTagId: string | null; installMethod: string }> {
+): Promise<{ scriptTagId: string | null; installMethod: string; snippet: string | null }> {
   try {
     const scriptTagId = String(await registerWidgetScriptTag(shop, accessToken));
-    return { scriptTagId, installMethod: "scripttag" };
+    return { scriptTagId, installMethod: "scripttag", snippet: null };
   } catch (err) {
-    console.warn(`[shopify] ScriptTag install failed for ${shop}, falling back to theme injection:`, err);
-    await injectWidgetViaThemeAsset(shop, accessToken);
-    return { scriptTagId: null, installMethod: "theme" };
+    console.warn(`[shopify] ScriptTag install failed for ${shop}, falling back to a manual snippet:`, err);
+    return { scriptTagId: null, installMethod: "manual", snippet: buildWidgetSnippet(shop) };
   }
 }

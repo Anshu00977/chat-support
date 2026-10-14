@@ -251,6 +251,10 @@ select:focus, input:focus, textarea:focus {
 .apps-page h2, .admins-page h2 { font-size: 1.2rem; margin-bottom: 1rem; }
 .apps-page h3, .admins-page h3 { font-size: 0.95rem; margin: 0 0 0.7rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
 
+.snippet-panel { margin-top: 1.75rem; padding: 1rem 1.25rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-neutral-bg); max-width: 640px; }
+.snippet-panel p { font-size: 0.85rem; color: var(--color-text-muted); line-height: 1.5; }
+.snippet-panel textarea { width: 100%; font-family: monospace; font-size: 0.8rem; padding: 0.6rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); resize: vertical; }
+.snippet-actions { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
 .bot-keywords { margin-top: 1.75rem; }
 .bot-keywords ul { list-style: none; padding: 0; margin: 0 0 1rem; display: flex; flex-direction: column; gap: 0.4rem; }
 .bot-keywords li {

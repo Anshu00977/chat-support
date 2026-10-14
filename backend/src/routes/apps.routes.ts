@@ -1,7 +1,12 @@
 import { Router } from "express";
 import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
-import { installWidget, removeWidgetFromThemeAsset, removeWidgetScriptTag } from "../services/shopify.service";
+import {
+  buildWidgetSnippet,
+  installWidget,
+  removeWidgetFromThemeAsset,
+  removeWidgetScriptTag,
+} from "../services/shopify.service";
 
 export const appsRouter = Router();
 
@@ -30,14 +35,16 @@ appsRouter.post("/install", async (req, res) => {
   });
 
   let { scriptTagId, installMethod } = app;
+  let snippet: string | null = installMethod === "manual" ? buildWidgetSnippet(shop) : null;
   if (!scriptTagId && !installMethod) {
     const result = await installWidget(shop, accessToken);
     scriptTagId = result.scriptTagId;
     installMethod = result.installMethod;
+    snippet = result.snippet;
     await prisma.shopifyApp.update({ where: { id: app.id }, data: { scriptTagId, installMethod } });
   }
 
-  res.status(201).json({ appId: app.id, shop: app.shop, scriptTagId, installMethod });
+  res.status(201).json({ appId: app.id, shop: app.shop, scriptTagId, installMethod, snippet });
 });
 
 appsRouter.use(requireAuth);
@@ -56,9 +63,18 @@ appsRouter.post("/:id/scripttag", requireRole("SUPER_ADMIN"), async (req, res) =
   const app = await prisma.shopifyApp.findUnique({ where: { id } });
   if (!app) return res.status(404).json({ error: "App not found" });
 
-  const { scriptTagId, installMethod } = await installWidget(app.shop, app.accessToken);
+  const { scriptTagId, installMethod, snippet } = await installWidget(app.shop, app.accessToken);
   await prisma.shopifyApp.update({ where: { id }, data: { scriptTagId, installMethod } });
-  res.json({ scriptTagId, installMethod });
+  res.json({ scriptTagId, installMethod, snippet });
+});
+
+// Re-fetches the paste-once snippet for an already "manual" app, without
+// retrying ScriptTag registration (which would just fail the same way again).
+appsRouter.get("/:id/snippet", async (req, res) => {
+  const id = Number(req.params.id);
+  const app = await prisma.shopifyApp.findUnique({ where: { id } });
+  if (!app) return res.status(404).json({ error: "App not found" });
+  res.json({ snippet: buildWidgetSnippet(app.shop) });
 });
 
 appsRouter.delete("/:id/scripttag", requireRole("SUPER_ADMIN"), async (req, res) => {

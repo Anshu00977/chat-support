@@ -7,7 +7,7 @@ interface ShopifyAppRow {
   name: string;
   shop: string;
   scriptTagId: string | null;
-  installMethod: "scripttag" | "theme" | null;
+  installMethod: "scripttag" | "manual" | null;
 }
 
 interface BotKeyword {
@@ -23,6 +23,9 @@ export function AppsPage() {
   const [keywords, setKeywords] = useState<BotKeyword[]>([]);
   const [keyword, setKeyword] = useState("");
   const [answer, setAnswer] = useState("");
+  const [snippetAppId, setSnippetAppId] = useState<number | null>(null);
+  const [snippet, setSnippet] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const loadApps = () => api.get("/apps").then((res) => setApps(res.data.apps));
 
@@ -53,8 +56,30 @@ export function AppsPage() {
   };
 
   const registerScriptTag = async (appId: number) => {
-    await api.post(`/apps/${appId}/scripttag`);
+    const res = await api.post(`/apps/${appId}/scripttag`);
     loadApps();
+    if (res.data.snippet) {
+      setSnippetAppId(appId);
+      setSnippet(res.data.snippet);
+      setCopied(false);
+    }
+  };
+
+  const viewSnippet = async (appId: number) => {
+    const res = await api.get(`/apps/${appId}/snippet`);
+    setSnippetAppId(appId);
+    setSnippet(res.data.snippet);
+    setCopied(false);
+  };
+
+  const copySnippet = async () => {
+    try {
+      await navigator.clipboard.writeText(snippet);
+      setCopied(true);
+    } catch {
+      // Clipboard API unavailable (e.g. insecure context) -- the textarea
+      // below is already selectable/copyable by hand either way.
+    }
   };
 
   return (
@@ -75,8 +100,8 @@ export function AppsPage() {
               <td>{a.name}</td>
               <td>{a.shop}</td>
               <td>
-                {a.installMethod === "theme"
-                  ? "Widget live (theme)"
+                {a.installMethod === "manual"
+                  ? "Needs manual snippet paste"
                   : a.installMethod === "scripttag"
                     ? "Widget live (script tag)"
                     : "Not installed"}
@@ -86,11 +111,28 @@ export function AppsPage() {
                 {admin?.role === "SUPER_ADMIN" && !a.installMethod && (
                   <button onClick={() => registerScriptTag(a.id)}>Install widget</button>
                 )}
+                {a.installMethod === "manual" && <button onClick={() => viewSnippet(a.id)}>View snippet</button>}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      {snippetAppId && (
+        <div className="snippet-panel">
+          <h3>Install snippet — {apps.find((a) => a.id === snippetAppId)?.name}</h3>
+          <p>
+            ScriptTag auto-install isn't available for this app (Shopify restriction). Paste this once into the
+            store's <code>theme.liquid</code>, right before <code>&lt;/body&gt;</code>, and the widget shows up
+            immediately — no further setup needed after that.
+          </p>
+          <textarea readOnly value={snippet} rows={2} onClick={(e) => e.currentTarget.select()} />
+          <div className="snippet-actions">
+            <button onClick={copySnippet}>{copied ? "Copied!" : "Copy snippet"}</button>
+            <button onClick={() => setSnippetAppId(null)}>Close</button>
+          </div>
+        </div>
+      )}
 
       {selectedAppId && (
         <div className="bot-keywords">
