@@ -55,19 +55,20 @@ messagesRouter.post("/", async (req, res) => {
     },
   });
 
-  const reply = await prisma.messageReply.create({
-    data: {
-      messageId: message.id,
-      sender: "BOT",
-      body: botAnswer ?? FALLBACK_REPLY,
-    },
-  });
+  // Only a real keyword match is worth keeping in the thread -- the generic
+  // "couldn't auto-answer" placeholder is just UI reassurance for whoever's
+  // waiting on the widget, not a message an admin needs to see repeated in
+  // their inbox every time. Built but not persisted when there's no match,
+  // so it's never part of what the dashboard loads for this conversation.
+  const reply = botAnswer
+    ? await prisma.messageReply.create({ data: { messageId: message.id, sender: "BOT", body: botAnswer } })
+    : { id: -1, messageId: message.id, sender: "BOT" as const, body: FALLBACK_REPLY, adminId: null, adminName: null, attachments: null, externalId: null, createdAt: new Date() };
 
   if (!botAnswer) {
     void notifyAdminsNeedsHuman({ messageId: message.id, shop, name: name ?? null, email: email ?? null, body });
   }
 
-  getIO().to(ADMINS_ROOM).emit(SocketEvents.NEW_CONVERSATION, { message: { ...message, replies: [reply] } });
+  getIO().to(ADMINS_ROOM).emit(SocketEvents.NEW_CONVERSATION, { message: { ...message, replies: botAnswer ? [reply] : [] } });
 
   res.status(201).json({ message: { ...message, replies: [reply] } });
 });
