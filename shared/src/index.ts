@@ -49,6 +49,7 @@ export interface MessageDTO {
   subject: string | null;
   body: string;
   status: MessageStatus;
+  archived: boolean;
   assignedAdminId: number | null;
   assignedAdmin: Pick<AdminDTO, "id" | "name"> | null;
   visitorId: string;
@@ -69,6 +70,8 @@ export const SocketEvents = {
   CONVERSATION_CLOSED: "conversation_closed",
   /** Broadcast to all connected admin dashboards when a brand-new conversation starts, so the inbox updates instantly with no polling. */
   NEW_CONVERSATION: "new_conversation",
+  CONVERSATION_ARCHIVED: "conversation_archived",
+  CONVERSATION_DELETED: "conversation_deleted",
 } as const;
 
 /** Room every authenticated admin socket auto-joins, used for inbox-wide broadcasts. */

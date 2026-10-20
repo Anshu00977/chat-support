@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { SocketEvents, type Attachment, type MessageDTO, type MessageReplyDTO } from "@chat-support/shared";
 import { api } from "../api/client";
 import { uploadFile } from "../api/uploads";
@@ -23,6 +23,7 @@ const TYPING_STOP_DELAY_MS = 2000;
 
 export function ConversationPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const conversationId = Number(id);
   const socket = useSocket();
   const { admin } = useAuth();
@@ -208,6 +209,26 @@ export function ConversationPage() {
     setConversation((prev) => (prev ? { ...prev, ...res.data.message } : res.data.message));
   };
 
+  const archive = async () => {
+    const res = await api.post(`/messages/${conversationId}/archive`);
+    setConversation((prev) => (prev ? { ...prev, ...res.data.message } : res.data.message));
+  };
+
+  const unarchive = async () => {
+    const res = await api.post(`/messages/${conversationId}/unarchive`);
+    setConversation((prev) => (prev ? { ...prev, ...res.data.message } : res.data.message));
+  };
+
+  const remove = async () => {
+    const wishkeeperWarning =
+      conversation?.source === "WISHKEEPER"
+        ? " This only deletes it from this dashboard -- the real history stays in WishKeeper's own database and may reappear on a future sync."
+        : "";
+    if (!window.confirm(`Permanently delete this conversation? This cannot be undone.${wishkeeperWarning}`)) return;
+    await api.delete(`/messages/${conversationId}`);
+    navigate("/");
+  };
+
   const transfer = async (targetAdminId: number) => {
     const res = await api.post(`/messages/${conversationId}/transfer`, { adminId: targetAdminId });
     setConversation((prev) => (prev ? { ...prev, ...res.data.message } : res.data.message));
@@ -226,6 +247,7 @@ export function ConversationPage() {
           <h2>{conversation.name || conversation.email || "Anonymous visitor"}</h2>
           <p className="muted">
             {conversation.source === "WISHKEEPER" && <span className="badge badge-wishkeeper">WishKeeper</span>} {conversation.shop} · <span className={`badge badge-${conversation.status.toLowerCase()}`}>{conversation.status.replace("_", " ")}</span>
+            {conversation.archived && <> · <span className="badge badge-archived">Archived</span></>}
             {conversation.assignedAdmin && ` · assigned to ${conversation.assignedAdmin.name}`}
             {" · "}
             <span className={`conn-indicator ${connected ? "online" : "offline"}`}>
@@ -248,6 +270,20 @@ export function ConversationPage() {
             </select>
           )}
           {!isClosed && <button onClick={close}>Close</button>}
+          {conversation.archived ? (
+            <button className="btn-ghost" onClick={unarchive}>
+              Unarchive
+            </button>
+          ) : (
+            <button className="btn-ghost" onClick={archive}>
+              Archive
+            </button>
+          )}
+          {admin?.role === "SUPER_ADMIN" && (
+            <button className="btn-danger" onClick={remove}>
+              Delete
+            </button>
+          )}
         </div>
       </div>
 

@@ -92,6 +92,7 @@ model Message {
   subject          String?
   body             String        @db.Text
   status           MessageStatus @default(OPEN)
+  archived         Boolean       @default(false)
   assignedAdminId  Int?
   assignedAdmin    Admin?        @relation("AssignedAdmin", fields: [assignedAdminId], references: [id])
   createdAt        DateTime      @default(now())

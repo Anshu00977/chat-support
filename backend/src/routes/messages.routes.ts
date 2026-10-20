@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { ADMINS_ROOM, SocketEvents, conversationRoom } from "@chat-support/shared";
 import { prisma } from "../prisma";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireRole } from "../middleware/auth";
 import { matchBotKeyword } from "../services/bot.service";
 import { notifyAdminsNeedsHuman } from "../services/mail.service";
 import { getIO } from "../socket/ioInstance";
@@ -107,18 +107,23 @@ messagesRouter.post("/:id/close-by-visitor", async (req, res) => {
 messagesRouter.use(requireAuth);
 
 messagesRouter.get("/", async (req, res) => {
-  const { appId, status, mine, source, search } = req.query as {
+  const { appId, status, mine, source, search, archived } = req.query as {
     appId?: string;
     status?: string;
     mine?: string;
     source?: string;
     search?: string;
+    archived?: string;
   };
 
   const term = search?.trim();
 
   const messages = await prisma.message.findMany({
     where: {
+      // Archived conversations are hidden from every normal view -- only
+      // the explicit ?archived=true request (the dashboard's Archived
+      // filter) shows them, same idea as an email client's Archive folder.
+      archived: archived === "true",
       appId: appId ? Number(appId) : undefined,
       status: status ? (status as any) : undefined,
       assignedAdminId: mine === "true" ? req.admin!.id : undefined,
@@ -215,4 +220,32 @@ messagesRouter.post("/:id/close", async (req, res) => {
   }
 
   res.json({ message: updated });
+});
+
+messagesRouter.post("/:id/archive", async (req, res) => {
+  const id = Number(req.params.id);
+  const updated = await prisma.message.update({ where: { id }, data: { archived: true } });
+  getIO().to(ADMINS_ROOM).emit(SocketEvents.CONVERSATION_ARCHIVED, { conversationId: id });
+  res.json({ message: updated });
+});
+
+messagesRouter.post("/:id/unarchive", async (req, res) => {
+  const id = Number(req.params.id);
+  const updated = await prisma.message.update({ where: { id }, data: { archived: false } });
+  res.json({ message: updated });
+});
+
+// Permanent -- gated to super admins, same bar as the other destructive
+// actions in this app (e.g. removing an app's ScriptTag). For a
+// WISHKEEPER-sourced conversation this only deletes Supportly's own mirror;
+// the real history still lives in WishKeeper's own database and can
+// resurface on a future sync, which the dashboard copy explains.
+messagesRouter.delete("/:id", requireRole("SUPER_ADMIN"), async (req, res) => {
+  const id = Number(req.params.id);
+  const message = await prisma.message.findUnique({ where: { id } });
+  if (!message) return res.status(404).json({ error: "Conversation not found" });
+
+  await prisma.message.delete({ where: { id } });
+  getIO().to(ADMINS_ROOM).emit(SocketEvents.CONVERSATION_DELETED, { conversationId: id });
+  res.status(204).send();
 });

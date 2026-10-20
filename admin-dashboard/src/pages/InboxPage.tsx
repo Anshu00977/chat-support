@@ -31,6 +31,7 @@ export function InboxPage() {
   const [status, setStatus] = useState<string>("");
   const [mineOnly, setMineOnly] = useState(false);
   const [search, setSearch] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
@@ -42,6 +43,7 @@ export function InboxPage() {
         status: status || undefined,
         mine: mineOnly ? "true" : undefined,
         search: search.trim() || undefined,
+        archived: showArchived ? "true" : undefined,
       },
     });
     setMessages(res.data.messages);
@@ -55,7 +57,7 @@ export function InboxPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appId, status, mineOnly]);
+  }, [appId, status, mineOnly, showArchived]);
 
   // Debounced separately from the other filters, which should refetch
   // immediately -- typing shouldn't fire a request per keystroke.
@@ -70,14 +72,19 @@ export function InboxPage() {
     if (!socket) return;
     const onNewConversation = () => load();
     const onMessage = () => load();
+    const onArchivedOrDeleted = () => load();
     socket.on(SocketEvents.NEW_CONVERSATION, onNewConversation);
     socket.on(SocketEvents.MESSAGE_RECEIVED, onMessage);
+    socket.on(SocketEvents.CONVERSATION_ARCHIVED, onArchivedOrDeleted);
+    socket.on(SocketEvents.CONVERSATION_DELETED, onArchivedOrDeleted);
     return () => {
       socket.off(SocketEvents.NEW_CONVERSATION, onNewConversation);
       socket.off(SocketEvents.MESSAGE_RECEIVED, onMessage);
+      socket.off(SocketEvents.CONVERSATION_ARCHIVED, onArchivedOrDeleted);
+      socket.off(SocketEvents.CONVERSATION_DELETED, onArchivedOrDeleted);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, appId, status, mineOnly, search]);
+  }, [socket, appId, status, mineOnly, search, showArchived]);
 
   const statCounts = messages.reduce<Record<string, number>>((acc, m) => {
     acc[m.status] = (acc[m.status] ?? 0) + 1;
@@ -142,6 +149,10 @@ export function InboxPage() {
           <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} />
           Assigned to me
         </label>
+        <label className="checkbox-label">
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+          Archived
+        </label>
       </div>
 
       {loading ? (
@@ -157,6 +168,7 @@ export function InboxPage() {
                   <span className="conversation-name">{m.name || m.email || "Anonymous visitor"}</span>
                   <span className="conversation-badges">
                     {m.source === "WISHKEEPER" && <span className="badge badge-wishkeeper">WishKeeper</span>}
+                    {m.archived && <span className="badge badge-archived">Archived</span>}
                     <span className={`badge badge-${m.status.toLowerCase()}`}>{STATUS_LABELS[m.status]}</span>
                   </span>
                 </div>
