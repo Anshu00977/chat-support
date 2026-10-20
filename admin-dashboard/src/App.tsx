@@ -8,6 +8,7 @@ import { InboxPage } from "./pages/InboxPage";
 import { ConversationPage } from "./pages/ConversationPage";
 import { AdminsPage } from "./pages/AdminsPage";
 import { AppsPage } from "./pages/AppsPage";
+import { CannedRepliesPage } from "./pages/CannedRepliesPage";
 
 export default function App() {
   return (
@@ -42,6 +43,16 @@ export default function App() {
                 <ProtectedRoute>
                   <Layout>
                     <AppsPage />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/canned-replies"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <CannedRepliesPage />
                   </Layout>
                 </ProtectedRoute>
               }

@@ -22,6 +22,29 @@
   --shadow-md: 0 4px 16px rgba(16, 24, 40, 0.08);
 }
 
+/* Dark mode: toggled via data-theme on <html> (see Layout.tsx / main.tsx).
+   Every color below is already a token, so this is the only block needed. */
+:root[data-theme="dark"] {
+  --color-primary: #818cf8;
+  --color-primary-hover: #a5b4fc;
+  --color-primary-light: #2b2a53;
+  --color-bg: #11131c;
+  --color-surface: #191b26;
+  --color-border: #2b2e3d;
+  --color-text: #eef0f6;
+  --color-text-muted: #9499ab;
+  --color-success: #4ade80;
+  --color-success-bg: #163225;
+  --color-warning: #fbbf24;
+  --color-warning-bg: #332512;
+  --color-info: #60a5fa;
+  --color-info-bg: #16233f;
+  --color-danger: #f87171;
+  --color-neutral-bg: #1f222f;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -29,6 +52,7 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 h1, h2, h3 { letter-spacing: -0.01em; }
 button { font-family: inherit; }
@@ -109,6 +133,7 @@ select:focus, input:focus, textarea:focus {
 .sidebar-link.active { background: var(--color-primary-light); color: var(--color-primary); font-weight: 600; }
 
 .sidebar-footer { border-top: 1px solid var(--color-border); padding-top: 0.9rem; display: flex; flex-direction: column; gap: 0.7rem; }
+.theme-toggle { width: 100%; text-align: left; font-size: 0.82rem; }
 .user-chip { display: flex; align-items: center; gap: 0.6rem; padding: 0 0.3rem; }
 .avatar {
   width: 34px; height: 34px; border-radius: 50%; background: var(--color-primary);
@@ -140,9 +165,25 @@ select:focus, input:focus, textarea:focus {
 .page-header { margin-bottom: 1.4rem; }
 .page-header h2 { margin: 0 0 0.2rem; font-size: 1.3rem; }
 
+.stats-bar { display: flex; gap: 0.75rem; margin-bottom: 1.2rem; flex-wrap: wrap; }
+.stat-tile {
+  flex: 1; min-width: 110px; background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); padding: 0.75rem 1rem; box-shadow: var(--shadow-sm);
+  display: flex; flex-direction: column; gap: 0.15rem;
+}
+.stat-value { font-size: 1.4rem; font-weight: 700; color: var(--color-text); }
+.stat-label { font-size: 0.75rem; color: var(--color-text-muted); font-weight: 500; }
+.stat-tile--warning .stat-value { color: var(--color-warning); }
+.stat-tile--info .stat-value { color: var(--color-info); }
+.stat-tile--success .stat-value { color: var(--color-success); }
+
 .inbox-filters { display: flex; gap: 0.6rem; margin-bottom: 1.2rem; align-items: center; flex-wrap: wrap; }
 .inbox-filters select {
   background: var(--color-surface); box-shadow: var(--shadow-sm);
+}
+.inbox-search {
+  flex: 1; min-width: 220px; background: var(--color-surface); box-shadow: var(--shadow-sm);
+  padding: 0.5rem 0.75rem;
 }
 .checkbox-label { display: flex; gap: 0.4rem; align-items: center; font-size: 0.85rem; color: var(--color-text-muted); }
 
@@ -220,6 +261,7 @@ select:focus, input:focus, textarea:focus {
 }
 .composer button { padding: 0 1.2rem; height: 50px; }
 .attach-btn { height: 50px; padding: 0 0.9rem !important; font-size: 1.1rem; }
+.canned-reply-picker { height: 50px; max-width: 150px; box-shadow: var(--shadow-sm); flex-shrink: 0; }
 .send-error { margin: 0; }
 
 .conn-indicator { font-weight: 600; }
@@ -262,3 +304,12 @@ select:focus, input:focus, textarea:focus {
   border: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; font-size: 0.87rem;
 }
 .bot-keywords li button { padding: 0.3rem 0.65rem; font-size: 0.75rem; }
+
+/* --- Canned replies page (reuses .bot-keywords li's row/card styling) --- */
+.canned-replies-page .page-header p { margin: 0; }
+.bot-keywords-list { list-style: none; padding: 0; margin: 0 0 1.5rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.bot-keywords-list li {
+  background: var(--color-surface); padding: 0.65rem 1rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+}
+.canned-reply-body { font-size: 0.82rem; color: var(--color-text-muted); margin-top: 0.2rem; }

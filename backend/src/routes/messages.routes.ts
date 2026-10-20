@@ -107,7 +107,15 @@ messagesRouter.post("/:id/close-by-visitor", async (req, res) => {
 messagesRouter.use(requireAuth);
 
 messagesRouter.get("/", async (req, res) => {
-  const { appId, status, mine, source } = req.query as { appId?: string; status?: string; mine?: string; source?: string };
+  const { appId, status, mine, source, search } = req.query as {
+    appId?: string;
+    status?: string;
+    mine?: string;
+    source?: string;
+    search?: string;
+  };
+
+  const term = search?.trim();
 
   const messages = await prisma.message.findMany({
     where: {
@@ -115,6 +123,16 @@ messagesRouter.get("/", async (req, res) => {
       status: status ? (status as any) : undefined,
       assignedAdminId: mine === "true" ? req.admin!.id : undefined,
       source: source === "WIDGET" || source === "WISHKEEPER" ? source : undefined,
+      ...(term
+        ? {
+            OR: [
+              { name: { contains: term } },
+              { email: { contains: term } },
+              { shop: { contains: term } },
+              { body: { contains: term } },
+            ],
+          }
+        : {}),
     },
     include: {
       assignedAdmin: { select: { id: true, name: true } },

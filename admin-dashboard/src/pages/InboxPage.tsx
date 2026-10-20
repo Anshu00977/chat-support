@@ -30,6 +30,7 @@ export function InboxPage() {
   const [appId, setAppId] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [mineOnly, setMineOnly] = useState(false);
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
@@ -40,6 +41,7 @@ export function InboxPage() {
         source: appId === WISHKEEPER_FILTER ? "WISHKEEPER" : undefined,
         status: status || undefined,
         mine: mineOnly ? "true" : undefined,
+        search: search.trim() || undefined,
       },
     });
     setMessages(res.data.messages);
@@ -55,6 +57,14 @@ export function InboxPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appId, status, mineOnly]);
 
+  // Debounced separately from the other filters, which should refetch
+  // immediately -- typing shouldn't fire a request per keystroke.
+  useEffect(() => {
+    const timer = setTimeout(load, 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
   // Live inbox: no polling — new conversations and replies push straight into the list.
   useEffect(() => {
     if (!socket) return;
@@ -67,7 +77,12 @@ export function InboxPage() {
       socket.off(SocketEvents.MESSAGE_RECEIVED, onMessage);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, appId, status, mineOnly]);
+  }, [socket, appId, status, mineOnly, search]);
+
+  const statCounts = messages.reduce<Record<string, number>>((acc, m) => {
+    acc[m.status] = (acc[m.status] ?? 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div className="inbox-page">
@@ -75,7 +90,37 @@ export function InboxPage() {
         <h2>Inbox</h2>
       </div>
 
+      <div className="stats-bar">
+        <div className="stat-tile">
+          <span className="stat-value">{messages.length}</span>
+          <span className="stat-label">In view</span>
+        </div>
+        <div className="stat-tile stat-tile--warning">
+          <span className="stat-value">{statCounts.NEEDS_HUMAN ?? 0}</span>
+          <span className="stat-label">Needs human</span>
+        </div>
+        <div className="stat-tile stat-tile--info">
+          <span className="stat-value">{(statCounts.OPEN ?? 0) + (statCounts.CLAIMED ?? 0)}</span>
+          <span className="stat-label">Open</span>
+        </div>
+        <div className="stat-tile stat-tile--success">
+          <span className="stat-value">{statCounts.BOT_HANDLED ?? 0}</span>
+          <span className="stat-label">Bot handled</span>
+        </div>
+        <div className="stat-tile">
+          <span className="stat-value">{statCounts.CLOSED ?? 0}</span>
+          <span className="stat-label">Closed</span>
+        </div>
+      </div>
+
       <div className="inbox-filters">
+        <input
+          type="search"
+          className="inbox-search"
+          placeholder="Search by name, shop or message…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
         <select value={appId} onChange={(e) => setAppId(e.target.value)}>
           <option value="">All apps</option>
           <option value={WISHKEEPER_FILTER}>WishKeeper merchants</option>

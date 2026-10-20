@@ -118,3 +118,11 @@ model MessageReply {
 
   @@index([messageId])
 }
+
+/// Shared quick-insert replies available to every admin in the composer.
+model CannedReply {
+  id        Int      @id @default(autoincrement())
+  shortcut  String   @unique // e.g. "refund" -- shown in the picker, not typed as a slash command
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+}

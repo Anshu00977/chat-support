@@ -13,6 +13,12 @@ interface AdminOption {
   active: boolean;
 }
 
+interface CannedReply {
+  id: number;
+  shortcut: string;
+  body: string;
+}
+
 const TYPING_STOP_DELAY_MS = 2000;
 
 export function ConversationPage() {
@@ -25,6 +31,7 @@ export function ConversationPage() {
   const [draft, setDraft] = useState("");
   const [customerTyping, setCustomerTyping] = useState(false);
   const [admins, setAdmins] = useState<AdminOption[]>([]);
+  const [cannedReplies, setCannedReplies] = useState<CannedReply[]>([]);
   const [connected, setConnected] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -57,6 +64,11 @@ export function ConversationPage() {
     api.get(`/messages/${conversationId}`).then((res) => setConversation(res.data.message));
     api.get("/admins").then((res) => setAdmins(res.data.admins.filter((a: AdminOption) => a.active)));
   }, [conversationId]);
+
+  // Shared across conversations, so only needs loading once per visit to the page.
+  useEffect(() => {
+    api.get("/canned-replies").then((res) => setCannedReplies(res.data.replies));
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
@@ -164,6 +176,12 @@ export function ConversationPage() {
       e.preventDefault();
       uploadFiles(files);
     }
+  };
+
+  const insertCannedReply = (id: string) => {
+    if (!id) return;
+    const reply = cannedReplies.find((r) => String(r.id) === id);
+    if (reply) onDraftChange(draft ? `${draft} ${reply.body}` : reply.body);
   };
 
   const onDraftChange = (value: string) => {
@@ -280,6 +298,22 @@ export function ConversationPage() {
               <button type="button" className="btn-ghost attach-btn" onClick={() => fileInputRef.current?.click()} aria-label="Attach file" title="Attach file">
                 📎
               </button>
+              {cannedReplies.length > 0 && (
+                <select
+                  className="canned-reply-picker"
+                  value=""
+                  onChange={(e) => insertCannedReply(e.target.value)}
+                  title="Insert a canned reply"
+                  aria-label="Insert a canned reply"
+                >
+                  <option value="">Canned replies…</option>
+                  {cannedReplies.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.shortcut}
+                    </option>
+                  ))}
+                </select>
+              )}
               <textarea
                 value={draft}
                 onChange={(e) => onDraftChange(e.target.value)}
