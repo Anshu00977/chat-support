@@ -36,6 +36,7 @@ export interface MessageReplyDTO {
   adminName: string | null;
   body: string;
   attachments: Attachment[] | null;
+  internal: boolean;
   createdAt: string;
 }
 
@@ -50,6 +51,10 @@ export interface MessageDTO {
   body: string;
   status: MessageStatus;
   archived: boolean;
+  starred: boolean;
+  snoozedUntil: string | null;
+  csatScore: number | null;
+  csatSubmittedAt: string | null;
   assignedAdminId: number | null;
   assignedAdmin: Pick<AdminDTO, "id" | "name"> | null;
   visitorId: string;
@@ -72,6 +77,7 @@ export const SocketEvents = {
   NEW_CONVERSATION: "new_conversation",
   CONVERSATION_ARCHIVED: "conversation_archived",
   CONVERSATION_DELETED: "conversation_deleted",
+  CSAT_SUBMITTED: "csat_submitted",
 } as const;
 
 /** Room every authenticated admin socket auto-joins, used for inbox-wide broadcasts. */

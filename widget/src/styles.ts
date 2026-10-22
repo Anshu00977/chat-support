@@ -106,4 +106,14 @@ export const widgetStyles = `
   background: #2563eb; color: #fff; border: none; border-radius: 6px;
   padding: 0.45rem 1rem; font-size: 0.8rem; cursor: pointer;
 }
+.csw-csat-prompt { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+.csw-csat-question { color: #444 !important; font-weight: 600; font-size: 0.82rem !important; }
+.csw-csat-stars { display: flex; gap: 0.2rem; }
+.csw-csat-star {
+  background: none !important; border: none; font-size: 1.25rem; padding: 0.15rem !important;
+  cursor: pointer; opacity: 0.35; transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.csw-csat-star:hover:not(:disabled) { opacity: 1; transform: scale(1.15); }
+.csw-csat-star:disabled { cursor: default; }
+.csw-csat-done { color: #16a34a !important; font-weight: 600; }
 `;

@@ -1,0 +1,3 @@
+ALTER TABLE `MessageReply` ADD COLUMN `internal` BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE `Message` ADD COLUMN `csatScore` INTEGER NULL;
+ALTER TABLE `Message` ADD COLUMN `csatSubmittedAt` DATETIME(3) NULL;

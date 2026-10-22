@@ -159,7 +159,9 @@ export async function ingestWishkeeperMessage(shop: string, wk: WkMessage, { liv
   }
   const updated = await prisma.message.update({
     where: { id: conversation.id },
-    data: { status, updatedAt: new Date() },
+    // A merchant reply wakes a snoozed conversation back up, same as a
+    // widget customer's reply does.
+    data: { status, updatedAt: new Date(), snoozedUntil: fromMerchant ? null : undefined },
   });
 
   if (!live) return;

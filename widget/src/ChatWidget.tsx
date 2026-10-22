@@ -28,6 +28,7 @@ export function ChatWidget({ apiUrl, shop }: { apiUrl: string; shop: string }) {
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [submittingCsat, setSubmittingCsat] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Resume an existing conversation for this shop/visitor, if any.
@@ -176,6 +177,20 @@ export function ChatWidget({ apiUrl, shop }: { apiUrl: string; shop: string }) {
     }
   };
 
+  const submitRating = async (score: number) => {
+    if (!conversation || submittingCsat || conversation.csatScore) return;
+    setSubmittingCsat(true);
+    try {
+      await api.submitCsat(conversation.id, visitorId, score);
+      setConversation((prev) => (prev ? { ...prev, csatScore: score } : prev));
+    } catch {
+      // Best-effort -- the customer already got their answer, a failed
+      // rating shouldn't block them from starting a new chat.
+    } finally {
+      setSubmittingCsat(false);
+    }
+  };
+
   const startNewChat = () => {
     clearStoredConversationId(shop);
     setConversation(null);
@@ -267,6 +282,28 @@ export function ChatWidget({ apiUrl, shop }: { apiUrl: string; shop: string }) {
                 {isClosed ? (
                   <div className="csw-closed-banner">
                     <p>This conversation has been closed.</p>
+                    {conversation.csatScore ? (
+                      <p className="csw-csat-done">Thanks for rating us {"⭐".repeat(conversation.csatScore)}!</p>
+                    ) : (
+                      <div className="csw-csat-prompt">
+                        <p className="csw-csat-question">How did we do?</p>
+                        <div className="csw-csat-stars">
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <button
+                              key={n}
+                              type="button"
+                              className="csw-csat-star"
+                              disabled={submittingCsat}
+                              onClick={() => submitRating(n)}
+                              aria-label={`Rate ${n} out of 5`}
+                              title={`Rate ${n} out of 5`}
+                            >
+                              ⭐
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <button onClick={startNewChat}>Start new chat</button>
                   </div>
                 ) : (

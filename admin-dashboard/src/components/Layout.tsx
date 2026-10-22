@@ -55,6 +55,9 @@ export function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/apps" className={navItem}>
             Apps
           </NavLink>
+          <NavLink to="/analytics" className={navItem}>
+            Analytics
+          </NavLink>
           <NavLink to="/canned-replies" className={navItem}>
             Canned replies
           </NavLink>

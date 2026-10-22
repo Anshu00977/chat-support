@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
 import { SocketEvents, type MessageDTO } from "@chat-support/shared";
 import { api } from "../api/client";
@@ -9,6 +9,38 @@ interface AppOption {
   id: number;
   name: string;
   shop: string;
+}
+
+interface SavedView {
+  id: string;
+  name: string;
+  appId: string;
+  status: string;
+  mineOnly: boolean;
+  showArchived: boolean;
+  starredOnly?: boolean;
+}
+
+const SAVED_VIEWS_KEY = "inbox-saved-views";
+const NOTIFY_PREF_KEY = "inbox-notify-enabled";
+
+function initials(name: string) {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+function loadSavedViews(): SavedView[] {
+  try {
+    const raw = localStorage.getItem(SAVED_VIEWS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
 }
 
 // Value of the "app" filter that selects WishKeeper merchant threads, which aren't tied to a widget app.
@@ -32,7 +64,13 @@ export function InboxPage() {
   const [mineOnly, setMineOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [showSnoozed, setShowSnoozed] = useState(false);
+  const [starredOnly, setStarredOnly] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [savedViews, setSavedViews] = useState<SavedView[]>(loadSavedViews);
+  const [notifyEnabled, setNotifyEnabled] = useState(
+    () => localStorage.getItem(NOTIFY_PREF_KEY) === "true" && typeof Notification !== "undefined" && Notification.permission === "granted"
+  );
 
   const load = async () => {
     setLoading(true);
@@ -44,6 +82,8 @@ export function InboxPage() {
         mine: mineOnly ? "true" : undefined,
         search: search.trim() || undefined,
         archived: showArchived ? "true" : undefined,
+        snoozed: showSnoozed ? "true" : undefined,
+        starred: starredOnly ? "true" : undefined,
       },
     });
     setMessages(res.data.messages);
@@ -54,10 +94,54 @@ export function InboxPage() {
     api.get("/apps").then((res) => setApps(res.data.apps));
   }, []);
 
+  const toggleNotifications = async () => {
+    if (notifyEnabled) {
+      setNotifyEnabled(false);
+      localStorage.setItem(NOTIFY_PREF_KEY, "false");
+      return;
+    }
+    if (typeof Notification === "undefined") return;
+    const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
+    if (permission === "granted") {
+      setNotifyEnabled(true);
+      localStorage.setItem(NOTIFY_PREF_KEY, "true");
+    }
+  };
+
+  const toggleStar = async (e: MouseEvent, id: number, currentlyStarred: boolean) => {
+    e.preventDefault(); // don't navigate into the conversation
+    e.stopPropagation();
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, starred: !currentlyStarred } : m)));
+    await api.post(`/messages/${id}/${currentlyStarred ? "unstar" : "star"}`);
+  };
+
+  const saveCurrentView = () => {
+    const name = window.prompt("Name this view:");
+    if (!name?.trim()) return;
+    const view: SavedView = { id: crypto.randomUUID(), name: name.trim(), appId, status, mineOnly, showArchived, starredOnly };
+    const next = [...savedViews, view];
+    setSavedViews(next);
+    localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(next));
+  };
+
+  const applyView = (view: SavedView) => {
+    setAppId(view.appId);
+    setStatus(view.status);
+    setMineOnly(view.mineOnly);
+    setShowArchived(view.showArchived);
+    setStarredOnly(view.starredOnly ?? false);
+  };
+
+  const removeView = (id: string) => {
+    const next = savedViews.filter((v) => v.id !== id);
+    setSavedViews(next);
+    localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(next));
+  };
+
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appId, status, mineOnly, showArchived]);
+  }, [appId, status, mineOnly, showArchived, showSnoozed, starredOnly]);
 
   // Debounced separately from the other filters, which should refetch
   // immediately -- typing shouldn't fire a request per keystroke.
@@ -84,7 +168,24 @@ export function InboxPage() {
       socket.off(SocketEvents.CONVERSATION_DELETED, onArchivedOrDeleted);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, appId, status, mineOnly, search, showArchived]);
+  }, [socket, appId, status, mineOnly, search, showArchived, showSnoozed, starredOnly]);
+
+  // Desktop notification on any new conversation, independent of the current
+  // filters -- otherwise switching to "My open" would silently stop alerting
+  // about brand-new unassigned ones. Only fires while the tab isn't focused;
+  // a visible tab already shows the new row live.
+  useEffect(() => {
+    if (!socket || !notifyEnabled) return;
+    const onNewConversation = (payload: { message?: { name?: string | null; shop?: string; body?: string } }) => {
+      if (!document.hidden || typeof Notification === "undefined" || Notification.permission !== "granted") return;
+      const who = payload?.message?.name || payload?.message?.shop || "A customer";
+      new Notification("New support conversation", { body: `${who}: ${payload?.message?.body ?? ""}`.slice(0, 120) });
+    };
+    socket.on(SocketEvents.NEW_CONVERSATION, onNewConversation);
+    return () => {
+      socket.off(SocketEvents.NEW_CONVERSATION, onNewConversation);
+    };
+  }, [socket, notifyEnabled]);
 
   const statCounts = messages.reduce<Record<string, number>>((acc, m) => {
     acc[m.status] = (acc[m.status] ?? 0) + 1;
@@ -93,9 +194,27 @@ export function InboxPage() {
 
   return (
     <div className="inbox-page">
-      <div className="page-header">
+      <div className="page-header page-header-row">
         <h2>Inbox</h2>
+        <button className="btn-ghost" onClick={toggleNotifications} title="Desktop notifications for new conversations">
+          {notifyEnabled ? "🔔 Notifications on" : "🔕 Notifications off"}
+        </button>
       </div>
+
+      {savedViews.length > 0 && (
+        <div className="saved-views">
+          {savedViews.map((v) => (
+            <span key={v.id} className="saved-view-chip">
+              <button className="btn-ghost" onClick={() => applyView(v)}>
+                {v.name}
+              </button>
+              <button className="saved-view-remove" onClick={() => removeView(v.id)} title="Remove this saved view" aria-label="Remove this saved view">
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="stats-bar">
         <div className="stat-tile">
@@ -153,35 +272,61 @@ export function InboxPage() {
           <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
           Archived
         </label>
+        <label className="checkbox-label">
+          <input type="checkbox" checked={showSnoozed} onChange={(e) => setShowSnoozed(e.target.checked)} />
+          Snoozed
+        </label>
+        <label className="checkbox-label">
+          <input type="checkbox" checked={starredOnly} onChange={(e) => setStarredOnly(e.target.checked)} />
+          ⭐ Starred
+        </label>
+        <button className="btn-ghost" onClick={saveCurrentView} title="Save the current filter combination">
+          + Save view
+        </button>
       </div>
 
       {loading ? (
         <p className="muted">Loading…</p>
       ) : messages.length === 0 ? (
-        <p className="muted">No conversations match these filters.</p>
+        <div className="empty-state">
+          <div className="empty-state-icon">📭</div>
+          <p>No conversations match these filters.</p>
+        </div>
       ) : (
         <ul className="conversation-list">
           {messages.map((m) => (
             <li key={m.id}>
               <Link to={`/conversations/${m.id}`} className="conversation-row">
-                <div className="conversation-row-top">
-                  <span className="conversation-name">{m.name || m.email || "Anonymous visitor"}</span>
-                  <span className="conversation-badges">
-                    {m.source === "WISHKEEPER" && <span className="badge badge-wishkeeper">WishKeeper</span>}
-                    {m.archived && <span className="badge badge-archived">Archived</span>}
-                    <span className={`badge badge-${m.status.toLowerCase()}`}>{STATUS_LABELS[m.status]}</span>
-                  </span>
-                </div>
-                <div className="conversation-row-bottom">
-                  <span className="conversation-shop">{m.shop}</span>
-                  <span className="conversation-preview">{m.replies?.[0]?.body ?? m.body}</span>
-                </div>
-                {m.assignedAdmin && (
-                  <div className="conversation-assignee">
-                    Assigned to {m.assignedAdmin.name}
-                    {m.assignedAdmin.id === admin?.id && " (you)"}
+                <button
+                  className={`star-btn${m.starred ? " starred" : ""}`}
+                  onClick={(e) => toggleStar(e, m.id, m.starred)}
+                  title={m.starred ? "Unstar" : "Star"}
+                  aria-label={m.starred ? "Unstar" : "Star"}
+                >
+                  {m.starred ? "⭐" : "☆"}
+                </button>
+                <div className="conversation-avatar">{initials(m.name || m.shop || "?")}</div>
+                <div className="conversation-row-main">
+                  <div className="conversation-row-top">
+                    <span className="conversation-name">{m.name || m.email || "Anonymous visitor"}</span>
+                    <span className="conversation-badges">
+                      {m.source === "WISHKEEPER" && <span className="badge badge-wishkeeper">WishKeeper</span>}
+                      {m.archived && <span className="badge badge-archived">Archived</span>}
+                      {m.snoozedUntil && <span className="badge badge-snoozed">Snoozed</span>}
+                      <span className={`badge badge-${m.status.toLowerCase()}`}>{STATUS_LABELS[m.status]}</span>
+                    </span>
                   </div>
-                )}
+                  <div className="conversation-row-bottom">
+                    <span className="conversation-shop">{m.shop}</span>
+                    <span className="conversation-preview">{m.replies?.[0]?.body ?? m.body}</span>
+                  </div>
+                  {m.assignedAdmin && (
+                    <div className="conversation-assignee">
+                      Assigned to {m.assignedAdmin.name}
+                      {m.assignedAdmin.id === admin?.id && " (you)"}
+                    </div>
+                  )}
+                </div>
               </Link>
             </li>
           ))}

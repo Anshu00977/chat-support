@@ -93,6 +93,10 @@ model Message {
   body             String        @db.Text
   status           MessageStatus @default(OPEN)
   archived         Boolean       @default(false)
+  starred          Boolean       @default(false)
+  snoozedUntil     DateTime? // hidden from the default inbox until this time, or until the customer replies (whichever first)
+  csatScore        Int? // 1-5, submitted once by the customer after close -- WIDGET conversations only
+  csatSubmittedAt  DateTime?
   assignedAdminId  Int?
   assignedAdmin    Admin?        @relation("AssignedAdmin", fields: [assignedAdminId], references: [id])
   createdAt        DateTime      @default(now())
@@ -115,6 +119,7 @@ model MessageReply {
   body        String      @db.Text
   attachments Json?
   externalId  String?     @unique // WishKeeper SupportMessage.id, used to de-duplicate synced messages
+  internal    Boolean     @default(false) // admin-only note -- never pushed to the customer or WishKeeper
   createdAt   DateTime    @default(now())
 
   @@index([messageId])

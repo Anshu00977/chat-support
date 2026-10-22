@@ -103,20 +103,43 @@ messagesRouter.post("/:id/close-by-visitor", async (req, res) => {
   res.json({ message: updated });
 });
 
+/** One-time customer satisfaction rating, prompted by the widget once a conversation closes. */
+messagesRouter.post("/:id/csat", async (req, res) => {
+  const id = Number(req.params.id);
+  const { visitorId, score } = req.body as { visitorId?: string; score?: number };
+  if (!visitorId) return res.status(400).json({ error: "visitorId is required" });
+  if (!score || score < 1 || score > 5) return res.status(400).json({ error: "score must be 1-5" });
+
+  const message = await prisma.message.findFirst({ where: { id, visitorId, source: "WIDGET" } });
+  if (!message) return res.status(404).json({ error: "Conversation not found" });
+  if (message.csatSubmittedAt) return res.status(409).json({ error: "Rating already submitted" });
+
+  const updated = await prisma.message.update({
+    where: { id },
+    data: { csatScore: score, csatSubmittedAt: new Date() },
+  });
+  getIO().to(ADMINS_ROOM).emit(SocketEvents.CSAT_SUBMITTED, { conversationId: id, score });
+
+  res.json({ message: updated });
+});
+
 // --- Everything below is for the admin dashboard ---
 messagesRouter.use(requireAuth);
 
 messagesRouter.get("/", async (req, res) => {
-  const { appId, status, mine, source, search, archived } = req.query as {
+  const { appId, status, mine, source, search, archived, starred, snoozed } = req.query as {
     appId?: string;
     status?: string;
     mine?: string;
     source?: string;
     search?: string;
     archived?: string;
+    starred?: string;
+    snoozed?: string;
   };
 
   const term = search?.trim();
+  const now = new Date();
 
   const messages = await prisma.message.findMany({
     where: {
@@ -124,20 +147,30 @@ messagesRouter.get("/", async (req, res) => {
       // the explicit ?archived=true request (the dashboard's Archived
       // filter) shows them, same idea as an email client's Archive folder.
       archived: archived === "true",
+      starred: starred === "true" ? true : undefined,
       appId: appId ? Number(appId) : undefined,
       status: status ? (status as any) : undefined,
       assignedAdminId: mine === "true" ? req.admin!.id : undefined,
       source: source === "WIDGET" || source === "WISHKEEPER" ? source : undefined,
-      ...(term
-        ? {
-            OR: [
-              { name: { contains: term } },
-              { email: { contains: term } },
-              { shop: { contains: term } },
-              { body: { contains: term } },
-            ],
-          }
-        : {}),
+      // Each OR-based condition goes in its own AND slot -- a search term
+      // and the snooze exclusion both need their own OR, and two top-level
+      // OR keys on the same object would just silently overwrite each other.
+      AND: [
+        // Snoozed conversations are hidden from the default view until
+        // their wake time passes -- ?snoozed=true shows only the ones
+        // still waiting, for the Snoozed filter.
+        snoozed === "true" ? { snoozedUntil: { gt: now } } : { OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }] },
+        term
+          ? {
+              OR: [
+                { name: { contains: term } },
+                { email: { contains: term } },
+                { shop: { contains: term } },
+                { body: { contains: term } },
+              ],
+            }
+          : {},
+      ],
     },
     include: {
       assignedAdmin: { select: { id: true, name: true } },
@@ -232,6 +265,40 @@ messagesRouter.post("/:id/archive", async (req, res) => {
 messagesRouter.post("/:id/unarchive", async (req, res) => {
   const id = Number(req.params.id);
   const updated = await prisma.message.update({ where: { id }, data: { archived: false } });
+  res.json({ message: updated });
+});
+
+messagesRouter.post("/:id/star", async (req, res) => {
+  const id = Number(req.params.id);
+  const updated = await prisma.message.update({ where: { id }, data: { starred: true } });
+  res.json({ message: updated });
+});
+
+messagesRouter.post("/:id/unstar", async (req, res) => {
+  const id = Number(req.params.id);
+  const updated = await prisma.message.update({ where: { id }, data: { starred: false } });
+  res.json({ message: updated });
+});
+
+// Hides the conversation from the default inbox until `until`, or until the
+// customer replies again (whichever comes first -- see the SHOP-sender
+// branch in socket/index.ts and ingestWishkeeperMessage, both of which clear
+// snoozedUntil on an inbound customer/merchant message).
+messagesRouter.post("/:id/snooze", async (req, res) => {
+  const id = Number(req.params.id);
+  const { until } = req.body as { until?: string };
+  const date = until ? new Date(until) : null;
+  if (!date || Number.isNaN(date.getTime()) || date.getTime() <= Date.now()) {
+    return res.status(400).json({ error: "until must be a valid future date" });
+  }
+  const updated = await prisma.message.update({ where: { id }, data: { snoozedUntil: date } });
+  getIO().to(ADMINS_ROOM).emit(SocketEvents.CONVERSATION_ARCHIVED, { conversationId: id }); // reuses the same "remove from view" refresh signal
+  res.json({ message: updated });
+});
+
+messagesRouter.post("/:id/unsnooze", async (req, res) => {
+  const id = Number(req.params.id);
+  const updated = await prisma.message.update({ where: { id }, data: { snoozedUntil: null } });
   res.json({ message: updated });
 });
 

@@ -1,0 +1,2 @@
+ALTER TABLE `Message` ADD COLUMN `starred` BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE `Message` ADD COLUMN `snoozedUntil` DATETIME(3) NULL;

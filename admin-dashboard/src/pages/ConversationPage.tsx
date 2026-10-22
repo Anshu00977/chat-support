@@ -36,6 +36,7 @@ export function ConversationPage() {
   const [connected, setConnected] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [noteMode, setNoteMode] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -92,6 +93,9 @@ export function ConversationPage() {
     const onClosed = ({ conversationId: cid }: { conversationId: number }) => {
       if (cid === conversationId) setConversation((prev) => (prev ? { ...prev, status: "CLOSED" } : prev));
     };
+    const onCsat = ({ conversationId: cid, score }: { conversationId: number; score: number }) => {
+      if (cid === conversationId) setConversation((prev) => (prev ? { ...prev, csatScore: score } : prev));
+    };
 
     socket.on(SocketEvents.MESSAGE_RECEIVED, onReply);
     socket.on(SocketEvents.TYPING, onTyping);
@@ -99,6 +103,7 @@ export function ConversationPage() {
     socket.on(SocketEvents.CONVERSATION_CLAIMED, onClaimed);
     socket.on(SocketEvents.CONVERSATION_TRANSFERRED, onClaimed);
     socket.on(SocketEvents.CONVERSATION_CLOSED, onClosed);
+    socket.on(SocketEvents.CSAT_SUBMITTED, onCsat);
 
     return () => {
       socket.off(SocketEvents.MESSAGE_RECEIVED, onReply);
@@ -107,6 +112,7 @@ export function ConversationPage() {
       socket.off(SocketEvents.CONVERSATION_CLAIMED, onClaimed);
       socket.off(SocketEvents.CONVERSATION_TRANSFERRED, onClaimed);
       socket.off(SocketEvents.CONVERSATION_CLOSED, onClosed);
+      socket.off(SocketEvents.CSAT_SUBMITTED, onCsat);
     };
   }, [socket, conversationId]);
 
@@ -123,7 +129,14 @@ export function ConversationPage() {
       .timeout(5000)
       .emit(
         SocketEvents.NEW_MESSAGE,
-        { conversationId, body: draft, sender: "ADMIN", adminName: admin?.name, attachments: pendingAttachments },
+        {
+          conversationId,
+          body: draft,
+          sender: "ADMIN",
+          adminName: admin?.name,
+          attachments: pendingAttachments,
+          internal: noteMode,
+        },
         (err: Error | null, res?: { ok: true; data: unknown } | { ok: false; error: string }) => {
           setSending(false);
           if (err) {
@@ -187,7 +200,7 @@ export function ConversationPage() {
 
   const onDraftChange = (value: string) => {
     setDraft(value);
-    if (!socket) return;
+    if (!socket || noteMode) return; // writing a note isn't something the customer should see "typing…" for
     socket.emit(SocketEvents.TYPING, { conversationId, sender: "ADMIN" });
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
     typingTimeout.current = setTimeout(() => {
@@ -219,6 +232,22 @@ export function ConversationPage() {
     setConversation((prev) => (prev ? { ...prev, ...res.data.message } : res.data.message));
   };
 
+  const toggleStar = async () => {
+    const res = await api.post(`/messages/${conversationId}/${conversation?.starred ? "unstar" : "star"}`);
+    setConversation((prev) => (prev ? { ...prev, ...res.data.message } : res.data.message));
+  };
+
+  const snooze = async (hours: number) => {
+    const until = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+    const res = await api.post(`/messages/${conversationId}/snooze`, { until });
+    setConversation((prev) => (prev ? { ...prev, ...res.data.message } : res.data.message));
+  };
+
+  const unsnooze = async () => {
+    const res = await api.post(`/messages/${conversationId}/unsnooze`);
+    setConversation((prev) => (prev ? { ...prev, ...res.data.message } : res.data.message));
+  };
+
   const remove = async () => {
     const wishkeeperWarning =
       conversation?.source === "WISHKEEPER"
@@ -244,10 +273,29 @@ export function ConversationPage() {
     <div className="conversation-page">
       <div className="conversation-header">
         <div>
-          <h2>{conversation.name || conversation.email || "Anonymous visitor"}</h2>
+          <h2>
+            <button className={`star-btn${conversation.starred ? " starred" : ""}`} onClick={toggleStar} title={conversation.starred ? "Unstar" : "Star"} aria-label={conversation.starred ? "Unstar" : "Star"}>
+              {conversation.starred ? "⭐" : "☆"}
+            </button>{" "}
+            {conversation.name || conversation.email || "Anonymous visitor"}
+          </h2>
           <p className="muted">
             {conversation.source === "WISHKEEPER" && <span className="badge badge-wishkeeper">WishKeeper</span>} {conversation.shop} · <span className={`badge badge-${conversation.status.toLowerCase()}`}>{conversation.status.replace("_", " ")}</span>
             {conversation.archived && <> · <span className="badge badge-archived">Archived</span></>}
+            {conversation.snoozedUntil && (
+              <>
+                {" · "}
+                <span className="badge badge-snoozed">Snoozed until {new Date(conversation.snoozedUntil).toLocaleString()}</span>
+              </>
+            )}
+            {conversation.csatScore && (
+              <>
+                {" · "}
+                <span className="csat-score" title={`Rated ${conversation.csatScore}/5`}>
+                  {"⭐".repeat(conversation.csatScore)}
+                </span>
+              </>
+            )}
             {conversation.assignedAdmin && ` · assigned to ${conversation.assignedAdmin.name}`}
             {" · "}
             <span className={`conn-indicator ${connected ? "online" : "offline"}`}>
@@ -270,6 +318,25 @@ export function ConversationPage() {
             </select>
           )}
           {!isClosed && <button onClick={close}>Close</button>}
+          {conversation.snoozedUntil ? (
+            <button className="btn-ghost" onClick={unsnooze}>
+              Unsnooze
+            </button>
+          ) : (
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value) snooze(Number(e.target.value));
+                e.target.value = "";
+              }}
+              title="Snooze until the customer replies or this time passes"
+            >
+              <option value="">Snooze…</option>
+              <option value="3">3 hours</option>
+              <option value="24">Tomorrow</option>
+              <option value="168">Next week</option>
+            </select>
+          )}
           {conversation.archived ? (
             <button className="btn-ghost" onClick={unarchive}>
               Unarchive
@@ -305,8 +372,12 @@ export function ConversationPage() {
                 <span>{r.body}</span>
               </div>
             ) : (
-              <div key={r.id} className={`bubble bubble-${r.sender.toLowerCase()}`}>
-                <div className="bubble-meta">{r.sender === "ADMIN" ? r.adminName ?? "Admin" : r.sender === "BOT" ? "Bot" : customerLabel}</div>
+              <div key={r.id} className={`bubble bubble-${r.sender.toLowerCase()}${r.internal ? " bubble-internal" : ""}`}>
+                <div className="bubble-meta">
+                  {r.internal && "🔒 "}
+                  {r.sender === "ADMIN" ? r.adminName ?? "Admin" : r.sender === "BOT" ? "Bot" : customerLabel}
+                  {r.internal && " · internal note"}
+                </div>
                 {r.body && <div className="bubble-body">{r.body}</div>}
                 {r.attachments && r.attachments.length > 0 && <AttachmentList attachments={r.attachments} />}
               </div>
@@ -317,9 +388,15 @@ export function ConversationPage() {
         </div>
 
         {!isClosed && (
-          <div className="composer-wrap">
+          <div className={`composer-wrap${noteMode ? " composer-wrap--note" : ""}`}>
             {sendError && <div className="error-banner send-error">{sendError}</div>}
             <AttachmentChips attachments={pendingAttachments} uploading={uploading} onRemove={removeAttachment} />
+            <div className="composer-mode-row">
+              <label className="checkbox-label note-toggle">
+                <input type="checkbox" checked={noteMode} onChange={(e) => setNoteMode(e.target.checked)} />
+                🔒 Internal note (not sent to {customerLabel.toLowerCase()})
+              </label>
+            </div>
             <div className="composer">
               <input
                 ref={fileInputRef}
@@ -360,10 +437,10 @@ export function ConversationPage() {
                     sendMessage();
                   }
                 }}
-                placeholder="Type a reply…"
+                placeholder={noteMode ? "Write an internal note…" : "Type a reply…"}
               />
               <button onClick={sendMessage} disabled={(!draft.trim() && pendingAttachments.length === 0) || sending || uploading}>
-                {sending ? "Sending…" : "Send"}
+                {sending ? "Sending…" : noteMode ? "Add note" : "Send"}
               </button>
             </div>
           </div>

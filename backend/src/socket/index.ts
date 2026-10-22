@@ -78,8 +78,9 @@ export function initSocket(httpServer: HttpServer): Server {
           sender: ReplySender;
           adminName?: string;
           attachments?: Attachment[];
+          internal?: boolean;
         }) => {
-          const { conversationId, body, sender, adminName, attachments } = payload;
+          const { conversationId, body, sender, adminName, attachments, internal } = payload;
           if (!body?.trim() && !attachments?.length) throw new Error("Message is empty");
 
           const conversation = await prisma.message.findUnique({
@@ -87,6 +88,27 @@ export function initSocket(httpServer: HttpServer): Server {
             select: { id: true, source: true, shop: true, externalThreadId: true },
           });
           if (!conversation) throw new Error("Conversation not found");
+
+          // Internal notes never leave this backend -- not pushed to
+          // WishKeeper, not emitted to the customer-facing conversation room,
+          // regardless of conversation source. Admin-only, always.
+          if (internal) {
+            if (sender !== "ADMIN" || !data.adminId) throw new Error("Only admins can add internal notes");
+            const note = await prisma.messageReply.create({
+              data: {
+                messageId: conversationId,
+                sender: "ADMIN",
+                adminId: data.adminId,
+                adminName: adminName ?? null,
+                body,
+                internal: true,
+                attachments: attachments?.length ? (attachments as unknown as object[]) : undefined,
+              },
+            });
+            await prisma.message.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });
+            io.to(ADMINS_ROOM).emit(SocketEvents.MESSAGE_RECEIVED, note);
+            return note;
+          }
 
           // WishKeeper merchants write from their own app, so the only valid
           // sender here is a logged-in admin; the reply goes to WishKeeper's DB.
@@ -117,6 +139,10 @@ export function initSocket(httpServer: HttpServer): Server {
             data: {
               updatedAt: new Date(),
               status: sender === "SHOP" ? "NEEDS_HUMAN" : undefined,
+              // A customer reply wakes a snoozed conversation back up --
+              // the whole point of snoozing is "nothing to do until they
+              // respond", so a response ends that by definition.
+              snoozedUntil: sender === "SHOP" ? null : undefined,
             },
           });
 

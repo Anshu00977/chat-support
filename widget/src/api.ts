@@ -40,6 +40,15 @@ export function createApi(apiUrl: string) {
       return data.message;
     },
 
+    async submitCsat(conversationId: number, visitorId: string, score: number): Promise<void> {
+      const res = await fetch(`${apiUrl}/api/messages/${conversationId}/csat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visitorId, score }),
+      });
+      if (!res.ok) throw new Error("Failed to submit rating");
+    },
+
     async uploadFile(file: File): Promise<Attachment> {
       const formData = new FormData();
       formData.append("file", file);

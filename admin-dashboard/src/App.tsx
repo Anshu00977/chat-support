@@ -9,6 +9,7 @@ import { ConversationPage } from "./pages/ConversationPage";
 import { AdminsPage } from "./pages/AdminsPage";
 import { AppsPage } from "./pages/AppsPage";
 import { CannedRepliesPage } from "./pages/CannedRepliesPage";
+import { AnalyticsPage } from "./pages/AnalyticsPage";
 
 export default function App() {
   return (
@@ -43,6 +44,16 @@ export default function App() {
                 <ProtectedRoute>
                   <Layout>
                     <AppsPage />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/analytics"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <AnalyticsPage />
                   </Layout>
                 </ProtectedRoute>
               }

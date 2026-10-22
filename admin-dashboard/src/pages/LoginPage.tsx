@@ -27,7 +27,9 @@ export function LoginPage() {
   return (
     <div className="auth-screen">
       <form className="auth-card" onSubmit={onSubmit}>
-        <h1>Support Admin</h1>
+        <div className="auth-mark">💬</div>
+        <h1>Welcome back</h1>
+        <p className="auth-subtitle">Sign in to your support dashboard</p>
         {error && <div className="error-banner">{error}</div>}
         <label>
           Email
