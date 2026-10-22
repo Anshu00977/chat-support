@@ -6,6 +6,7 @@ import { matchBotKeyword } from "../services/bot.service";
 import { notifyAdminsNeedsHuman } from "../services/mail.service";
 import { getIO } from "../socket/ioInstance";
 import { setWishkeeperThreadClosed } from "../services/wishkeeper.service";
+import { setEmbeddedThreadClosed } from "../services/embeddedChat.service";
 
 export const messagesRouter = Router();
 
@@ -250,6 +251,8 @@ messagesRouter.post("/:id/close", async (req, res) => {
 
   if (updated.source === "WISHKEEPER") {
     void setWishkeeperThreadClosed(updated.shop, true);
+  } else if (updated.source === "EMBEDDED") {
+    void setEmbeddedThreadClosed(updated.shop, true);
   }
 
   res.json({ message: updated });

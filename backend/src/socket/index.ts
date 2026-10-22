@@ -7,6 +7,7 @@ import { verifyAdminToken } from "../utils/jwt";
 import { setIO } from "./ioInstance";
 import { setupTypingHandlers } from "./typing";
 import { sendWishkeeperAdminReply } from "../services/wishkeeper.service";
+import { sendEmbeddedAdminReply } from "../services/embeddedChat.service";
 
 interface SocketData {
   adminId?: number;
@@ -63,7 +64,9 @@ export function initSocket(httpServer: HttpServer): Server {
         });
         if (!conversation) throw new Error("Conversation not found");
         // Merchant support threads are only ever viewed from the dashboard.
-        if (conversation.source === "WISHKEEPER" && !data.adminId) throw new Error("Conversation not found");
+        if ((conversation.source === "WISHKEEPER" || conversation.source === "EMBEDDED") && !data.adminId) {
+          throw new Error("Conversation not found");
+        }
         socket.join(conversationRoom(conversationId));
         return { conversationId };
       })
@@ -115,6 +118,18 @@ export function initSocket(httpServer: HttpServer): Server {
           if (conversation.source === "WISHKEEPER") {
             if (sender !== "ADMIN" || !data.adminId) throw new Error("Only admins can reply to WishKeeper conversations");
             const replies = await sendWishkeeperAdminReply({
+              conversation,
+              admin: { id: data.adminId, name: adminName ?? null },
+              body: body ?? "",
+              attachments: attachments ?? [],
+            });
+            return replies[replies.length - 1];
+          }
+
+          // Same idea, generalized for any other app connected via EmbeddedApp.
+          if (conversation.source === "EMBEDDED") {
+            if (sender !== "ADMIN" || !data.adminId) throw new Error("Only admins can reply to this conversation");
+            const replies = await sendEmbeddedAdminReply({
               conversation,
               admin: { id: data.adminId, name: adminName ?? null },
               body: body ?? "",

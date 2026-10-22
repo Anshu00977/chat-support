@@ -1,0 +1,15 @@
+ALTER TABLE `Message` MODIFY COLUMN `source` ENUM('WIDGET', 'WISHKEEPER', 'EMBEDDED') NOT NULL DEFAULT 'WIDGET';
+
+CREATE TABLE `EmbeddedApp` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(191) NOT NULL,
+    `shop` VARCHAR(191) NOT NULL,
+    `databaseUrl` TEXT NOT NULL,
+    `appUrl` VARCHAR(191) NOT NULL,
+    `internalSecret` TEXT NOT NULL,
+    `adminDisplayName` VARCHAR(191) NOT NULL DEFAULT 'Support',
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    UNIQUE INDEX `EmbeddedApp_shop_key`(`shop`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4;

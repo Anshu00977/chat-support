@@ -62,6 +62,11 @@ export function Layout({ children }: { children: ReactNode }) {
             Canned replies
           </NavLink>
           {admin?.role === "SUPER_ADMIN" && (
+            <NavLink to="/embedded-apps" className={navItem}>
+              Embedded apps
+            </NavLink>
+          )}
+          {admin?.role === "SUPER_ADMIN" && (
             <NavLink to="/admins" className={navItem}>
               Admins
             </NavLink>

@@ -10,6 +10,7 @@ import { AdminsPage } from "./pages/AdminsPage";
 import { AppsPage } from "./pages/AppsPage";
 import { CannedRepliesPage } from "./pages/CannedRepliesPage";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
+import { EmbeddedAppsPage } from "./pages/EmbeddedAppsPage";
 
 export default function App() {
   return (
@@ -64,6 +65,16 @@ export default function App() {
                 <ProtectedRoute>
                   <Layout>
                     <CannedRepliesPage />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/embedded-apps"
+              element={
+                <ProtectedRoute requireSuperAdmin>
+                  <Layout>
+                    <EmbeddedAppsPage />
                   </Layout>
                 </ProtectedRoute>
               }

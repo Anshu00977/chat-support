@@ -5,6 +5,7 @@ import { env } from "./config/env";
 import { seedSuperAdminIfNeeded } from "./bootstrap/seedSuperAdmin";
 import { seedAppsFromEnv } from "./bootstrap/seedAppsFromEnv";
 import { syncWishkeeperOnBoot, wishkeeperEnabled } from "./services/wishkeeper.service";
+import { syncAllEmbeddedAppsOnBoot } from "./services/embeddedChat.service";
 
 // Defense in depth: request/socket handlers already catch their own errors,
 // but this stops any error that slips through from taking the whole process down.
@@ -29,6 +30,7 @@ async function main() {
   } else {
     console.log("WishKeeper support integration disabled (set WISHKEEPER_DATABASE_URL + SUPPORT_INTERNAL_SECRET to enable).");
   }
+  syncAllEmbeddedAppsOnBoot().catch((err) => console.error("Embedded app sync failed:", err));
 }
 
 main().catch((err) => {

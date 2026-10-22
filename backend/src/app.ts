@@ -11,8 +11,10 @@ import { messagesRouter } from "./routes/messages.routes";
 import { widgetRouter } from "./routes/widget.routes";
 import { uploadsRouter, UPLOADS_DIR } from "./routes/uploads.routes";
 import { wishkeeperRouter } from "./routes/wishkeeper.routes";
+import { embeddedChatRouter } from "./routes/embeddedChat.routes";
 import { cannedRepliesRouter } from "./routes/cannedReplies.routes";
 import { analyticsRouter } from "./routes/analytics.routes";
+import { embeddedAppsRouter } from "./routes/embeddedApps.routes";
 
 export function createApp() {
   const app = express();
@@ -31,6 +33,8 @@ export function createApp() {
 
   // Server-to-server contract with the WishKeeper Shopify app (/internal/*) + its attachment links.
   app.use("/", wishkeeperRouter);
+  // Generic version for every other connected app (/embedded/internal/*, /embedded-files/*).
+  app.use("/", embeddedChatRouter);
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
   app.get("/", (_req, res) => res.redirect("/admin/"));
@@ -45,6 +49,7 @@ export function createApp() {
   app.use("/api/uploads", uploadsRouter);
   app.use("/api/canned-replies", cannedRepliesRouter);
   app.use("/api/analytics", analyticsRouter);
+  app.use("/api/embedded-apps", embeddedAppsRouter);
 
   // Admin dashboard SPA, served at /admin (the backend's own domain, no
   // separate subdomain/deploy needed). VITE_API_URL is baked in at build

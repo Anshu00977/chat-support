@@ -1,6 +1,7 @@
 import type { Server, Socket } from "socket.io";
 import { SocketEvents, conversationRoom, type ReplySender } from "@chat-support/shared";
 import { forwardAdminTyping } from "../services/wishkeeper.service";
+import { forwardEmbeddedTyping } from "../services/embeddedChat.service";
 
 const TYPING_TIMEOUT_MS = 3000;
 
@@ -39,6 +40,7 @@ export function setupTypingHandlers(io: Server, socket: Socket) {
     broadcastTyping(io, conversationId, sender, socket);
     if (sender === "ADMIN") {
       forwardAdminTyping(conversationId).catch((err) => console.error("Failed to forward typing to WishKeeper:", err));
+      forwardEmbeddedTyping(conversationId).catch((err) => console.error("Failed to forward typing to embedded app:", err));
     }
   });
 

@@ -25,6 +25,9 @@ enum MessageStatus {
 enum MessageSource {
   WIDGET
   WISHKEEPER
+  // Any other Shopify app wired up via the generic EmbeddedApp integration
+  // (same contract WishKeeper uses, just not hardcoded to one app).
+  EMBEDDED
 }
 
 enum ReplySender {
@@ -131,4 +134,20 @@ model CannedReply {
   shortcut  String   @unique // e.g. "refund" -- shown in the picker, not typed as a slash command
   body      String   @db.Text
   createdAt DateTime @default(now())
+}
+
+/// A Shopify app connected via the generic embedded-chat integration (the
+/// same contract WishKeeper uses, generalized so any app can register
+/// instead of needing bespoke code here per app). One row per connected
+/// app; its own database holds the actual SupportThread/SupportMessage
+/// tables, mirrored into Message/MessageReply the same way WishKeeper's are.
+model EmbeddedApp {
+  id               Int      @id @default(autoincrement())
+  name             String
+  shop             String   @unique
+  databaseUrl      String   @db.Text // that app's own DB connection string
+  appUrl           String // where to push replies/typing -- self-updates via /internal/register-url
+  internalSecret   String   @db.Text // this app's own secret, not shared with any other
+  adminDisplayName String   @default("Support")
+  createdAt        DateTime @default(now())
 }
