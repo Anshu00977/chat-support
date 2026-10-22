@@ -6,6 +6,7 @@ import { uploadFile } from "../api/uploads";
 import { useSocket } from "../context/SocketContext";
 import { useAuth } from "../context/AuthContext";
 import { AttachmentChips, AttachmentList } from "../components/Attachments";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 
 interface AdminOption {
   id: number;
@@ -36,6 +37,8 @@ export function ConversationPage() {
   const [connected, setConnected] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [noteMode, setNoteMode] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -248,14 +251,15 @@ export function ConversationPage() {
     setConversation((prev) => (prev ? { ...prev, ...res.data.message } : res.data.message));
   };
 
-  const remove = async () => {
-    const wishkeeperWarning =
-      conversation?.source === "WISHKEEPER"
-        ? " This only deletes it from this dashboard -- the real history stays in WishKeeper's own database and may reappear on a future sync."
-        : "";
-    if (!window.confirm(`Permanently delete this conversation? This cannot be undone.${wishkeeperWarning}`)) return;
-    await api.delete(`/messages/${conversationId}`);
-    navigate("/");
+  const confirmRemove = async () => {
+    setDeleting(true);
+    try {
+      await api.delete(`/messages/${conversationId}`);
+      navigate("/");
+    } finally {
+      setDeleting(false);
+      setConfirmingDelete(false);
+    }
   };
 
   const transfer = async (targetAdminId: number) => {
@@ -347,7 +351,7 @@ export function ConversationPage() {
             </button>
           )}
           {admin?.role === "SUPER_ADMIN" && (
-            <button className="btn-danger" onClick={remove}>
+            <button className="btn-danger" onClick={() => setConfirmingDelete(true)}>
               Delete
             </button>
           )}
@@ -446,6 +450,22 @@ export function ConversationPage() {
           </div>
         )}
       </div>
+
+      {confirmingDelete && (
+        <ConfirmDialog
+          title="Delete this conversation?"
+          message={
+            conversation.source === "WISHKEEPER"
+              ? "This cannot be undone. This only deletes it from this dashboard -- the real history stays in WishKeeper's own database and may reappear on a future sync."
+              : "This cannot be undone -- the conversation and all its messages will be permanently removed."
+          }
+          confirmLabel="Delete"
+          danger
+          busy={deleting}
+          onConfirm={confirmRemove}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
     </div>
   );
 }

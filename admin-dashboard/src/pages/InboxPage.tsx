@@ -4,6 +4,8 @@ import { SocketEvents, type MessageDTO } from "@chat-support/shared";
 import { api } from "../api/client";
 import { useSocket } from "../context/SocketContext";
 import { useAuth } from "../context/AuthContext";
+import { PromptDialog } from "../components/PromptDialog";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 
 interface AppOption {
   id: number;
@@ -68,6 +70,8 @@ export function InboxPage() {
   const [starredOnly, setStarredOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savedViews, setSavedViews] = useState<SavedView[]>(loadSavedViews);
+  const [savingView, setSavingView] = useState(false);
+  const [removingViewId, setRemovingViewId] = useState<string | null>(null);
   const [notifyEnabled, setNotifyEnabled] = useState(
     () => localStorage.getItem(NOTIFY_PREF_KEY) === "true" && typeof Notification !== "undefined" && Notification.permission === "granted"
   );
@@ -115,13 +119,12 @@ export function InboxPage() {
     await api.post(`/messages/${id}/${currentlyStarred ? "unstar" : "star"}`);
   };
 
-  const saveCurrentView = () => {
-    const name = window.prompt("Name this view:");
-    if (!name?.trim()) return;
-    const view: SavedView = { id: crypto.randomUUID(), name: name.trim(), appId, status, mineOnly, showArchived, starredOnly };
+  const saveCurrentView = (name: string) => {
+    const view: SavedView = { id: crypto.randomUUID(), name, appId, status, mineOnly, showArchived, starredOnly };
     const next = [...savedViews, view];
     setSavedViews(next);
     localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(next));
+    setSavingView(false);
   };
 
   const applyView = (view: SavedView) => {
@@ -132,10 +135,12 @@ export function InboxPage() {
     setStarredOnly(view.starredOnly ?? false);
   };
 
-  const removeView = (id: string) => {
-    const next = savedViews.filter((v) => v.id !== id);
+  const confirmRemoveView = () => {
+    if (!removingViewId) return;
+    const next = savedViews.filter((v) => v.id !== removingViewId);
     setSavedViews(next);
     localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(next));
+    setRemovingViewId(null);
   };
 
   useEffect(() => {
@@ -208,7 +213,7 @@ export function InboxPage() {
               <button className="btn-ghost" onClick={() => applyView(v)}>
                 {v.name}
               </button>
-              <button className="saved-view-remove" onClick={() => removeView(v.id)} title="Remove this saved view" aria-label="Remove this saved view">
+              <button className="saved-view-remove" onClick={() => setRemovingViewId(v.id)} title="Remove this saved view" aria-label="Remove this saved view">
                 ×
               </button>
             </span>
@@ -280,7 +285,7 @@ export function InboxPage() {
           <input type="checkbox" checked={starredOnly} onChange={(e) => setStarredOnly(e.target.checked)} />
           ⭐ Starred
         </label>
-        <button className="btn-ghost" onClick={saveCurrentView} title="Save the current filter combination">
+        <button className="btn-ghost" onClick={() => setSavingView(true)} title="Save the current filter combination">
           + Save view
         </button>
       </div>
@@ -331,6 +336,28 @@ export function InboxPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {savingView && (
+        <PromptDialog
+          title="Save this view"
+          label="Name"
+          placeholder="e.g. My open, Needs human"
+          confirmLabel="Save"
+          onSubmit={saveCurrentView}
+          onCancel={() => setSavingView(false)}
+        />
+      )}
+
+      {removingViewId && (
+        <ConfirmDialog
+          title="Remove this saved view?"
+          message="You can always save it again later -- this only removes the shortcut, not any conversations."
+          confirmLabel="Remove"
+          danger
+          onConfirm={confirmRemoveView}
+          onCancel={() => setRemovingViewId(null)}
+        />
       )}
     </div>
   );

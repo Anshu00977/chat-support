@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../api/client";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 
 interface CannedReply {
   id: number;
@@ -12,6 +13,7 @@ export function CannedRepliesPage() {
   const [shortcut, setShortcut] = useState("");
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<number | null>(null);
 
   const load = () => api.get("/canned-replies").then((res) => setReplies(res.data.replies));
 
@@ -32,9 +34,11 @@ export function CannedRepliesPage() {
     }
   };
 
-  const removeReply = async (id: number) => {
-    await api.delete(`/canned-replies/${id}`);
-    setReplies((prev) => prev.filter((r) => r.id !== id));
+  const confirmRemoveReply = async () => {
+    if (!removingId) return;
+    await api.delete(`/canned-replies/${removingId}`);
+    setReplies((prev) => prev.filter((r) => r.id !== removingId));
+    setRemovingId(null);
   };
 
   return (
@@ -54,7 +58,7 @@ export function CannedRepliesPage() {
                 <strong>{r.shortcut}</strong>
                 <div className="canned-reply-body">{r.body}</div>
               </div>
-              <button className="btn-ghost" onClick={() => removeReply(r.id)}>
+              <button className="btn-ghost" onClick={() => setRemovingId(r.id)}>
                 Remove
               </button>
             </li>
@@ -69,6 +73,17 @@ export function CannedRepliesPage() {
         <input placeholder="Reply text" value={body} onChange={(e) => setBody(e.target.value)} required />
         <button type="submit">Add</button>
       </form>
+
+      {removingId && (
+        <ConfirmDialog
+          title="Remove this canned reply?"
+          message="This only removes the shortcut from the picker -- it doesn't affect any messages already sent."
+          confirmLabel="Remove"
+          danger
+          onConfirm={confirmRemoveReply}
+          onCancel={() => setRemovingId(null)}
+        />
+      )}
     </div>
   );
 }

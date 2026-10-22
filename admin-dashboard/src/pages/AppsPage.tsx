@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 
 interface ShopifyAppRow {
   id: number;
@@ -26,6 +27,7 @@ export function AppsPage() {
   const [snippetAppId, setSnippetAppId] = useState<number | null>(null);
   const [snippet, setSnippet] = useState("");
   const [copied, setCopied] = useState(false);
+  const [removingKeywordId, setRemovingKeywordId] = useState<number | null>(null);
 
   const loadApps = () => api.get("/apps").then((res) => setApps(res.data.apps));
 
@@ -49,10 +51,11 @@ export function AppsPage() {
     setKeywords(res.data.keywords);
   };
 
-  const removeKeyword = async (id: number) => {
-    if (!selectedAppId) return;
-    await api.delete(`/apps/${selectedAppId}/keywords/${id}`);
-    setKeywords((prev) => prev.filter((k) => k.id !== id));
+  const confirmRemoveKeyword = async () => {
+    if (!selectedAppId || !removingKeywordId) return;
+    await api.delete(`/apps/${selectedAppId}/keywords/${removingKeywordId}`);
+    setKeywords((prev) => prev.filter((k) => k.id !== removingKeywordId));
+    setRemovingKeywordId(null);
   };
 
   const registerScriptTag = async (appId: number) => {
@@ -141,7 +144,7 @@ export function AppsPage() {
             {keywords.map((k) => (
               <li key={k.id}>
                 <strong>{k.keyword}</strong> → {k.answer}
-                <button onClick={() => removeKeyword(k.id)}>Remove</button>
+                <button onClick={() => setRemovingKeywordId(k.id)}>Remove</button>
               </li>
             ))}
           </ul>
@@ -151,6 +154,17 @@ export function AppsPage() {
             <button type="submit">Add</button>
           </form>
         </div>
+      )}
+
+      {removingKeywordId && (
+        <ConfirmDialog
+          title="Remove this keyword?"
+          message="Customer messages matching it will no longer get an automatic bot answer."
+          confirmLabel="Remove"
+          danger
+          onConfirm={confirmRemoveKeyword}
+          onCancel={() => setRemovingKeywordId(null)}
+        />
       )}
     </div>
   );
