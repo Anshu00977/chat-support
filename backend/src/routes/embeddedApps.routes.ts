@@ -11,32 +11,27 @@ embeddedAppsRouter.use(requireAuth);
 // pattern as a typical API key UI (shown once, then write-only).
 embeddedAppsRouter.get("/", async (_req, res) => {
   const apps = await prisma.embeddedApp.findMany({
-    select: { id: true, name: true, shop: true, appUrl: true, adminDisplayName: true, createdAt: true },
+    select: { id: true, name: true, appUrl: true, adminDisplayName: true, createdAt: true },
     orderBy: { createdAt: "asc" },
   });
   res.json({ apps });
 });
 
 embeddedAppsRouter.post("/", requireRole("SUPER_ADMIN"), async (req, res) => {
-  const { name, shop, databaseUrl, appUrl, adminDisplayName } = req.body as {
+  const { name, databaseUrl, appUrl, adminDisplayName } = req.body as {
     name?: string;
-    shop?: string;
     databaseUrl?: string;
     appUrl?: string;
     adminDisplayName?: string;
   };
-  if (!name?.trim() || !shop?.trim() || !databaseUrl?.trim() || !appUrl?.trim()) {
-    return res.status(400).json({ error: "name, shop, databaseUrl and appUrl are required" });
+  if (!name?.trim() || !databaseUrl?.trim() || !appUrl?.trim()) {
+    return res.status(400).json({ error: "name, databaseUrl and appUrl are required" });
   }
-
-  const existing = await prisma.embeddedApp.findUnique({ where: { shop: shop.trim() } });
-  if (existing) return res.status(409).json({ error: "An app is already connected for this shop" });
 
   const internalSecret = crypto.randomBytes(24).toString("hex");
   const app = await prisma.embeddedApp.create({
     data: {
       name: name.trim(),
-      shop: shop.trim(),
       databaseUrl: databaseUrl.trim(),
       appUrl: appUrl.trim().replace(/\/$/, ""),
       internalSecret,
@@ -46,7 +41,7 @@ embeddedAppsRouter.post("/", requireRole("SUPER_ADMIN"), async (req, res) => {
 
   // Returned once, same as the embedded-apps/scripttag snippet flow -- the
   // caller has to copy it into the connecting app's own .env now.
-  res.status(201).json({ app: { id: app.id, name: app.name, shop: app.shop }, internalSecret });
+  res.status(201).json({ app: { id: app.id, name: app.name }, internalSecret });
 });
 
 embeddedAppsRouter.delete("/:id", requireRole("SUPER_ADMIN"), async (req, res) => {

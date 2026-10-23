@@ -14,8 +14,16 @@ import { notifyAdminsNeedsHuman } from "./mail.service";
  * dashboard's Embedded Apps page) instead of env vars, so new apps don't
  * need a deploy on this side to connect.
  *
+ * One row = one connected APP, not one shop -- identified by its secret,
+ * not by a shop domain, so any number of shops that install that app all
+ * reach the same connection (exactly like WishKeeper's dedicated
+ * integration serves every WishKeeper-installing shop from one connection).
+ * Which shop a given conversation is with is just data on that
+ * conversation (and on the connected app's own SupportThread row), not
+ * part of how we find the app.
+ *
  *  - App -> us:  POST /internal/notify  { shop, message } | { shop, type: "typing" | "seen" | "reset" }
- *               POST /internal/register-url { shop, url }
+ *               POST /internal/register-url { url }
  *  - us -> App:  admin replies INSERTed into that app's own SupportMessage
  *               table directly (raw SQL against its own database), then
  *               pushed live via POST {appUrl}/app/support/internal-notify.
@@ -27,38 +35,59 @@ import { notifyAdminsNeedsHuman } from "./mail.service";
 interface EmbeddedAppRow {
   id: number;
   name: string;
-  shop: string;
   databaseUrl: string;
   appUrl: string;
   internalSecret: string;
   adminDisplayName: string;
 }
 
-// Cached per shop: the row itself (short TTL, since appUrl can change via
+// Cached by id: the row itself (short TTL, since appUrl can change via
 // register-url) and a long-lived PrismaClient pointed at that app's own
 // database (expensive to create per-request, safe to reuse indefinitely).
-const appCache = new Map<string, { row: EmbeddedAppRow; fetchedAt: number }>();
-const dbCache = new Map<string, PrismaClient>();
+const appCacheById = new Map<number, { row: EmbeddedAppRow; fetchedAt: number }>();
+const appCacheBySecret = new Map<string, { row: EmbeddedAppRow; fetchedAt: number }>();
+const dbCache = new Map<number, PrismaClient>();
 const APP_CACHE_TTL_MS = 30_000;
 
-async function getEmbeddedApp(shop: string): Promise<EmbeddedAppRow | null> {
-  const cached = appCache.get(shop);
+function cacheApp(row: EmbeddedAppRow) {
+  const entry = { row, fetchedAt: Date.now() };
+  appCacheById.set(row.id, entry);
+  appCacheBySecret.set(row.internalSecret, entry);
+}
+
+function invalidateApp(row: EmbeddedAppRow) {
+  appCacheById.delete(row.id);
+  appCacheBySecret.delete(row.internalSecret);
+}
+
+async function getEmbeddedAppById(id: number): Promise<EmbeddedAppRow | null> {
+  const cached = appCacheById.get(id);
   if (cached && Date.now() - cached.fetchedAt < APP_CACHE_TTL_MS) return cached.row;
 
-  const row = await prisma.embeddedApp.findUnique({ where: { shop } });
+  const row = await prisma.embeddedApp.findUnique({ where: { id } });
   if (!row) {
-    appCache.delete(shop);
+    appCacheById.delete(id);
     return null;
   }
-  appCache.set(shop, { row, fetchedAt: Date.now() });
+  cacheApp(row);
+  return row;
+}
+
+async function getEmbeddedAppBySecret(secret: string): Promise<EmbeddedAppRow | null> {
+  const cached = appCacheBySecret.get(secret);
+  if (cached && Date.now() - cached.fetchedAt < APP_CACHE_TTL_MS) return cached.row;
+
+  const row = await prisma.embeddedApp.findUnique({ where: { internalSecret: secret } });
+  if (!row) return null;
+  cacheApp(row);
   return row;
 }
 
 function getAppDb(row: EmbeddedAppRow): PrismaClient {
-  let db = dbCache.get(row.shop);
+  let db = dbCache.get(row.id);
   if (!db) {
     db = new PrismaClient({ datasourceUrl: row.databaseUrl });
-    dbCache.set(row.shop, db);
+    dbCache.set(row.id, db);
   }
   return db;
 }
@@ -78,12 +107,10 @@ export interface EmbeddedMessage {
 
 const VARCHAR_MAX = 191;
 
-/** Verifies the request's secret against the specific app it claims to be for -- not a single shared secret. */
-export async function verifyEmbeddedSecret(shop: string, providedSecret: string | undefined): Promise<EmbeddedAppRow | null> {
+/** Verifies the request's secret and returns the app it belongs to, or null. */
+export async function verifyEmbeddedSecret(providedSecret: string | undefined): Promise<EmbeddedAppRow | null> {
   if (!providedSecret) return null;
-  const app = await getEmbeddedApp(shop);
-  if (!app || app.internalSecret !== providedSecret) return null;
-  return app;
+  return getEmbeddedAppBySecret(providedSecret);
 }
 
 /**
@@ -122,7 +149,7 @@ function prettyShopName(shop: string) {
     .join(" ");
 }
 
-async function findOrCreateConversation(app: EmbeddedAppRow, first: EmbeddedMessage) {
+async function findOrCreateConversation(app: EmbeddedAppRow, shop: string, first: EmbeddedMessage) {
   const existing = await prisma.message.findUnique({ where: { externalThreadId: first.threadId } });
   if (existing) return { conversation: existing, isNew: false };
 
@@ -130,10 +157,11 @@ async function findOrCreateConversation(app: EmbeddedAppRow, first: EmbeddedMess
     const conversation = await prisma.message.create({
       data: {
         source: "EMBEDDED",
+        embeddedAppId: app.id,
         externalThreadId: first.threadId,
-        shop: app.shop,
-        visitorId: `embedded:${app.shop}`,
-        name: `${prettyShopName(app.shop)} (${app.name})`,
+        shop,
+        visitorId: `embedded:${app.id}:${shop}`,
+        name: `${prettyShopName(shop)} (${app.name})`,
         body: first.body || first.attachmentName || "(attachment)",
         status: first.sender === "admin" ? "OPEN" : "NEEDS_HUMAN",
       },
@@ -147,10 +175,15 @@ async function findOrCreateConversation(app: EmbeddedAppRow, first: EmbeddedMess
 }
 
 /** Mirrors one message from a connected app into our tables. Idempotent by externalId. */
-export async function ingestEmbeddedMessage(app: EmbeddedAppRow, msg: EmbeddedMessage, { live }: { live: boolean }) {
+export async function ingestEmbeddedMessage(
+  app: EmbeddedAppRow,
+  shop: string,
+  msg: EmbeddedMessage,
+  { live }: { live: boolean }
+) {
   if (await prisma.messageReply.findUnique({ where: { externalId: msg.id }, select: { id: true } })) return;
 
-  const { conversation, isNew } = await findOrCreateConversation(app, msg);
+  const { conversation, isNew } = await findOrCreateConversation(app, shop, msg);
   const fromMerchant = msg.sender !== "admin";
 
   let reply: MessageReply;
@@ -194,22 +227,23 @@ export async function ingestEmbeddedMessage(app: EmbeddedAppRow, msg: EmbeddedMe
   if (fromMerchant && (isNew || reopened)) {
     void notifyAdminsNeedsHuman({
       messageId: conversation.id,
-      shop: app.shop,
-      name: app.shop,
+      shop,
+      name: shop,
       email: null,
       body: msg.body || `(sent an attachment: ${msg.attachmentName ?? "file"})`,
-      intro: `A merchant on ${app.name} (${app.shop}) sent a support message.`,
+      intro: `A merchant on ${app.name} (${shop}) sent a support message.`,
     });
   }
 }
 
-/** Imports every message not yet mirrored for one connected app. Runs for all of them on boot. */
+/** Imports every message not yet mirrored for one connected app, across all of its shops. Runs for all apps on boot. */
 export async function syncEmbeddedApp(app: EmbeddedAppRow) {
   const db = getAppDb(app);
-  const rows = await db.$queryRaw<EmbeddedMessage[]>`
+  const rows = await db.$queryRaw<(EmbeddedMessage & { shop: string })[]>`
     SELECT m.id, m.threadId, m.sender, m.body, m.attachmentUrl, m.attachmentName,
-           m.attachmentType, m.attachmentSize, m.createdAt
+           m.attachmentType, m.attachmentSize, m.createdAt, t.shop
     FROM SupportMessage m
+    JOIN SupportThread t ON t.id = m.threadId
     ORDER BY m.createdAt ASC`;
 
   const known = new Set(
@@ -221,7 +255,7 @@ export async function syncEmbeddedApp(app: EmbeddedAppRow) {
   let imported = 0;
   for (const row of rows) {
     if (known.has(row.id)) continue;
-    await ingestEmbeddedMessage(app, row, { live: false });
+    await ingestEmbeddedMessage(app, row.shop, row, { live: false });
     imported++;
   }
   if (imported > 0 || rows.length > 0) {
@@ -235,7 +269,7 @@ export async function syncAllEmbeddedAppsOnBoot() {
     try {
       await syncEmbeddedApp(app);
     } catch (err) {
-      console.error(`Embedded app sync failed for ${app.name} (${app.shop}):`, err);
+      console.error(`Embedded app sync failed for ${app.name}:`, err);
     }
   }
 }
@@ -260,13 +294,14 @@ function absoluteUrl(url: string) {
 
 /** Sends an admin's reply to a connected app's merchant. */
 export async function sendEmbeddedAdminReply(params: {
-  conversation: { id: number; shop: string; externalThreadId: string | null };
+  conversation: { id: number; shop: string; embeddedAppId: number | null; externalThreadId: string | null };
   admin: { id: number; name: string | null };
   body: string;
   attachments: Attachment[];
 }): Promise<MessageReply[]> {
   const { conversation, admin, attachments } = params;
-  const app = await getEmbeddedApp(conversation.shop);
+  if (!conversation.embeddedAppId) throw new Error("This app is not connected");
+  const app = await getEmbeddedAppById(conversation.embeddedAppId);
   if (!app) throw new Error("This app is not connected");
   if (!conversation.externalThreadId) throw new Error("Conversation is not linked to a thread");
   const threadId = conversation.externalThreadId;
@@ -334,37 +369,46 @@ export async function sendEmbeddedAdminReply(params: {
   return replies;
 }
 
-const shopByConversation = new Map<number, string | null>();
+const appByConversation = new Map<number, { shop: string; embeddedAppId: number } | null>();
 const lastTypingPush = new Map<number, number>();
 const TYPING_PUSH_INTERVAL_MS = 2000;
 
 /** Forwards an admin's typing indicator to the merchant's widget (throttled), via DB timestamp (polling-based). */
 export async function forwardEmbeddedTyping(conversationId: number) {
-  if (!shopByConversation.has(conversationId)) {
+  if (!appByConversation.has(conversationId)) {
     const conversation = await prisma.message.findUnique({
       where: { id: conversationId },
-      select: { source: true, shop: true },
+      select: { source: true, shop: true, embeddedAppId: true },
     });
-    shopByConversation.set(conversationId, conversation?.source === "EMBEDDED" ? conversation.shop : null);
+    appByConversation.set(
+      conversationId,
+      conversation?.source === "EMBEDDED" && conversation.embeddedAppId
+        ? { shop: conversation.shop, embeddedAppId: conversation.embeddedAppId }
+        : null
+    );
   }
-  const shop = shopByConversation.get(conversationId);
-  if (!shop) return;
+  const info = appByConversation.get(conversationId);
+  if (!info) return;
 
   const now = Date.now();
   if (now - (lastTypingPush.get(conversationId) ?? 0) < TYPING_PUSH_INTERVAL_MS) return;
   lastTypingPush.set(conversationId, now);
 
-  const app = await getEmbeddedApp(shop);
+  const app = await getEmbeddedAppById(info.embeddedAppId);
   if (!app) return;
   const db = getAppDb(app);
-  await db.$executeRaw`UPDATE SupportThread SET adminTypingAt = ${new Date()} WHERE shop = ${shop}`;
+  await db.$executeRaw`UPDATE SupportThread SET adminTypingAt = ${new Date()} WHERE shop = ${info.shop}`;
 }
 
-export async function setEmbeddedThreadClosed(shop: string, closed: boolean) {
-  const app = await getEmbeddedApp(shop);
+export async function setEmbeddedThreadClosed(
+  conversation: { shop: string; embeddedAppId: number | null },
+  closed: boolean
+) {
+  if (!conversation.embeddedAppId) return;
+  const app = await getEmbeddedAppById(conversation.embeddedAppId);
   if (!app) return;
   const db = getAppDb(app);
-  await db.$executeRaw`UPDATE SupportThread SET closedAt = ${closed ? new Date() : null} WHERE shop = ${shop}`;
+  await db.$executeRaw`UPDATE SupportThread SET closedAt = ${closed ? new Date() : null} WHERE shop = ${conversation.shop}`;
 }
 
 export async function recordEmbeddedReset(shop: string) {
@@ -385,16 +429,9 @@ export async function findEmbeddedConversationId(shop: string): Promise<number |
   return conversation?.id ?? null;
 }
 
-export async function setEmbeddedAppUrl(shop: string, url: string) {
-  const app = await prisma.embeddedApp.findUnique({ where: { shop } });
-  if (!app) return;
+export async function setEmbeddedAppUrl(app: EmbeddedAppRow, url: string) {
   const normalized = url.replace(/\/$/, "");
   if (normalized === app.appUrl) return;
-  await prisma.embeddedApp.update({ where: { shop }, data: { appUrl: normalized } });
-  appCache.delete(shop); // force a fresh read next time, picking up the new URL
-}
-
-export async function getEmbeddedAppUrl(shop: string): Promise<string | null> {
-  const app = await getEmbeddedApp(shop);
-  return app?.appUrl ?? null;
+  await prisma.embeddedApp.update({ where: { id: app.id }, data: { appUrl: normalized } });
+  invalidateApp(app); // force a fresh read next time, picking up the new URL
 }

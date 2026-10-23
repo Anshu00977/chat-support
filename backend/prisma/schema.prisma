@@ -86,6 +86,8 @@ model Message {
   id               Int           @id @default(autoincrement())
   appId            Int? // null for WISHKEEPER conversations, which aren't tied to a widget store
   app              ShopifyApp?   @relation(fields: [appId], references: [id], onDelete: Restrict)
+  embeddedAppId    Int? // which connected EmbeddedApp this conversation belongs to, for EMBEDDED conversations
+  embeddedApp      EmbeddedApp?  @relation(fields: [embeddedAppId], references: [id], onDelete: SetNull)
   source           MessageSource @default(WIDGET)
   externalThreadId String?       @unique // WishKeeper SupportThread.id, for WISHKEEPER conversations
   shop             String
@@ -139,15 +141,17 @@ model CannedReply {
 /// A Shopify app connected via the generic embedded-chat integration (the
 /// same contract WishKeeper uses, generalized so any app can register
 /// instead of needing bespoke code here per app). One row per connected
-/// app; its own database holds the actual SupportThread/SupportMessage
-/// tables, mirrored into Message/MessageReply the same way WishKeeper's are.
+/// APP (not per shop) -- any shop that installs that app reaches this same
+/// row, identified by its secret rather than by a specific shop, exactly
+/// like WishKeeper's own dedicated integration serves every shop that
+/// installs WishKeeper from one shared connection.
 model EmbeddedApp {
-  id               Int      @id @default(autoincrement())
+  id               Int       @id @default(autoincrement())
   name             String
-  shop             String   @unique
-  databaseUrl      String   @db.Text // that app's own DB connection string
+  databaseUrl      String    @db.Text // that app's own DB connection string
   appUrl           String // where to push replies/typing -- self-updates via /internal/register-url
-  internalSecret   String   @db.Text // this app's own secret, not shared with any other
-  adminDisplayName String   @default("Support")
-  createdAt        DateTime @default(now())
+  internalSecret   String    @unique // this app's own secret, not shared with any other -- also how inbound requests are identified
+  adminDisplayName String    @default("Support")
+  createdAt        DateTime  @default(now())
+  conversations    Message[]
 }

@@ -5,7 +5,6 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 interface EmbeddedAppRow {
   id: number;
   name: string;
-  shop: string;
   appUrl: string;
   adminDisplayName: string;
 }
@@ -13,7 +12,6 @@ interface EmbeddedAppRow {
 export function EmbeddedAppsPage() {
   const [apps, setApps] = useState<EmbeddedAppRow[]>([]);
   const [name, setName] = useState("");
-  const [shop, setShop] = useState("");
   const [databaseUrl, setDatabaseUrl] = useState("");
   const [appUrl, setAppUrl] = useState("");
   const [adminDisplayName, setAdminDisplayName] = useState("");
@@ -32,11 +30,10 @@ export function EmbeddedAppsPage() {
     e.preventDefault();
     setError(null);
     try {
-      const res = await api.post("/embedded-apps", { name, shop, databaseUrl, appUrl, adminDisplayName });
+      const res = await api.post("/embedded-apps", { name, databaseUrl, appUrl, adminDisplayName });
       setNewSecret({ name: res.data.app.name, secret: res.data.internalSecret });
       setCopied(false);
       setName("");
-      setShop("");
       setDatabaseUrl("");
       setAppUrl("");
       setAdminDisplayName("");
@@ -69,7 +66,7 @@ export function EmbeddedAppsPage() {
         <h2>Embedded apps</h2>
         <p className="muted">
           Connects an app's own in-admin merchant chat (same pattern as WishKeeper's) to this dashboard, without
-          needing any code changes here per app.
+          needing any code changes here per app. One connection serves every shop that installs that app.
         </p>
       </div>
 
@@ -80,7 +77,6 @@ export function EmbeddedAppsPage() {
           <thead>
             <tr>
               <th>Name</th>
-              <th>Shop</th>
               <th>App URL</th>
               <th></th>
             </tr>
@@ -89,7 +85,6 @@ export function EmbeddedAppsPage() {
             {apps.map((a) => (
               <tr key={a.id}>
                 <td>{a.name}</td>
-                <td>{a.shop}</td>
                 <td>{a.appUrl}</td>
                 <td>
                   <button className="btn-ghost" onClick={() => setRemovingId(a.id)}>
@@ -106,7 +101,6 @@ export function EmbeddedAppsPage() {
       <form className="admin-create-form" onSubmit={createApp}>
         {error && <div className="error-banner">{error}</div>}
         <input placeholder="App name (e.g. ConvoBridge)" value={name} onChange={(e) => setName(e.target.value)} required />
-        <input placeholder="Shop (store.myshopify.com)" value={shop} onChange={(e) => setShop(e.target.value)} required />
         <input
           placeholder="App URL (e.g. https://convobridge.example.com)"
           value={appUrl}

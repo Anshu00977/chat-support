@@ -88,7 +88,7 @@ export function initSocket(httpServer: HttpServer): Server {
 
           const conversation = await prisma.message.findUnique({
             where: { id: conversationId },
-            select: { id: true, source: true, shop: true, externalThreadId: true },
+            select: { id: true, source: true, shop: true, externalThreadId: true, embeddedAppId: true },
           });
           if (!conversation) throw new Error("Conversation not found");
 

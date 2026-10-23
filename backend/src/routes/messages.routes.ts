@@ -252,7 +252,7 @@ messagesRouter.post("/:id/close", async (req, res) => {
   if (updated.source === "WISHKEEPER") {
     void setWishkeeperThreadClosed(updated.shop, true);
   } else if (updated.source === "EMBEDDED") {
-    void setEmbeddedThreadClosed(updated.shop, true);
+    void setEmbeddedThreadClosed(updated, true);
   }
 
   res.json({ message: updated });
