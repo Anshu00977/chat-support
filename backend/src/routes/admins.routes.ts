@@ -67,6 +67,28 @@ adminsRouter.patch("/:id/role", requireRole("SUPER_ADMIN"), async (req, res) => 
   res.json({ admin });
 });
 
+// Any authenticated admin can change their own password (not someone else's).
+adminsRouter.patch("/me/password", async (req, res) => {
+  const { currentPassword, newPassword } = req.body as { currentPassword?: string; newPassword?: string };
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: "currentPassword and newPassword are required" });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: "newPassword must be at least 8 characters" });
+  }
+
+  const admin = await prisma.admin.findUnique({ where: { id: req.admin!.id } });
+  if (!admin) return res.status(404).json({ error: "Admin not found" });
+
+  const valid = await bcrypt.compare(currentPassword, admin.passwordHash);
+  if (!valid) return res.status(401).json({ error: "Current password is incorrect" });
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await prisma.admin.update({ where: { id: admin.id }, data: { passwordHash } });
+
+  res.json({ ok: true });
+});
+
 // Only super_admin can deactivate/reactivate.
 adminsRouter.patch("/:id/active", requireRole("SUPER_ADMIN"), async (req, res) => {
   const id = Number(req.params.id);

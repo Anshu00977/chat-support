@@ -271,7 +271,10 @@ export function ConversationPage() {
 
   const isMine = conversation.assignedAdmin?.id === admin?.id;
   const isClosed = conversation.status === "CLOSED";
-  const customerLabel = conversation.source === "WISHKEEPER" ? "Merchant" : "Customer";
+  const customerKind = conversation.source === "WISHKEEPER" || conversation.source === "EMBEDDED" ? "Merchant" : "Customer";
+  // Prefer the actual name they gave over the generic "Customer"/"Merchant" label.
+  const customerLabel = conversation.name?.trim() || customerKind;
+  const canReply = Boolean(conversation.assignedAdmin);
 
   return (
     <div className="conversation-page">
@@ -308,7 +311,7 @@ export function ConversationPage() {
           </p>
         </div>
         <div className="conversation-actions">
-          {!conversation.assignedAdmin && !isClosed && <button onClick={claim}>Claim</button>}
+          {!conversation.assignedAdmin && !isClosed && <button onClick={claim}>Accept</button>}
           {isMine && !isClosed && (
             <select defaultValue="" onChange={(e) => e.target.value && transfer(Number(e.target.value))}>
               <option value="">Transfer to…</option>
@@ -384,6 +387,9 @@ export function ConversationPage() {
                 </div>
                 {r.body && <div className="bubble-body">{r.body}</div>}
                 {r.attachments && r.attachments.length > 0 && <AttachmentList attachments={r.attachments} />}
+                <div className="bubble-time">
+                  {new Date(r.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </div>
               </div>
             )
           )}
@@ -391,7 +397,13 @@ export function ConversationPage() {
           <div ref={bottomRef} />
         </div>
 
-        {!isClosed && (
+        {!isClosed && !canReply && (
+          <div className="composer-wrap composer-wrap--locked">
+            <p className="muted">Click "Accept" above to start chatting with {customerLabel}.</p>
+          </div>
+        )}
+
+        {!isClosed && canReply && (
           <div className={`composer-wrap${noteMode ? " composer-wrap--note" : ""}`}>
             {sendError && <div className="error-banner send-error">{sendError}</div>}
             <AttachmentChips attachments={pendingAttachments} uploading={uploading} onRemove={removeAttachment} />

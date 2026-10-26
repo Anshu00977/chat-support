@@ -2,7 +2,6 @@ import { Router } from "express";
 import { ADMINS_ROOM, SocketEvents, conversationRoom } from "@chat-support/shared";
 import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
-import { matchBotKeyword } from "../services/bot.service";
 import { notifyAdminsNeedsHuman } from "../services/mail.service";
 import { getIO } from "../socket/ioInstance";
 import { setWishkeeperThreadClosed } from "../services/wishkeeper.service";
@@ -10,19 +9,20 @@ import { setEmbeddedThreadClosed } from "../services/embeddedChat.service";
 
 export const messagesRouter = Router();
 
-const FALLBACK_REPLY =
-  "Thanks for reaching out! Our team couldn't auto-answer that, but a human will get back to you shortly.";
+// Shown instantly to every new conversation -- there's no FAQ bot anymore,
+// so this always applies rather than only on a missed keyword match.
+const FALLBACK_REPLY = "Thanks for reaching out! A human will get back to you shortly.";
 
 const replyInclude = {
   replies: { orderBy: { createdAt: "asc" as const } },
 };
 
 /**
- * Public endpoint the widget calls to start a conversation. Runs the
- * rule-based FAQ bot against the message body; on a match the customer
- * gets an instant answer, otherwise admins are emailed that a human is
- * needed. The full message + any bot reply is returned in the response so
- * the widget can render it immediately, before it even joins the socket room.
+ * Public endpoint the widget calls to start a conversation. Always needs a
+ * human -- there's no auto-answering bot -- so admins are emailed right
+ * away and the customer sees an instant "a human will get back to you"
+ * placeholder reply while they wait, built but not persisted (it's UI
+ * reassurance for the widget, not something an admin needs in their inbox).
  */
 messagesRouter.post("/", async (req, res) => {
   const { shop, name, email, subject, body, visitorId } = req.body as {
@@ -41,35 +41,25 @@ messagesRouter.post("/", async (req, res) => {
   const app = await prisma.shopifyApp.findUnique({ where: { shop } });
   if (!app) return res.status(404).json({ error: "Unknown shop" });
 
-  const botAnswer = await matchBotKeyword(app.id, body);
-
   const message = await prisma.message.create({
-    data: {
-      appId: app.id,
-      shop,
-      visitorId,
-      name,
-      email,
-      subject,
-      body,
-      status: botAnswer ? "BOT_HANDLED" : "NEEDS_HUMAN",
-    },
+    data: { appId: app.id, shop, visitorId, name, email, subject, body, status: "NEEDS_HUMAN" },
   });
 
-  // Only a real keyword match is worth keeping in the thread -- the generic
-  // "couldn't auto-answer" placeholder is just UI reassurance for whoever's
-  // waiting on the widget, not a message an admin needs to see repeated in
-  // their inbox every time. Built but not persisted when there's no match,
-  // so it's never part of what the dashboard loads for this conversation.
-  const reply = botAnswer
-    ? await prisma.messageReply.create({ data: { messageId: message.id, sender: "BOT", body: botAnswer } })
-    : { id: -1, messageId: message.id, sender: "BOT" as const, body: FALLBACK_REPLY, adminId: null, adminName: null, attachments: null, externalId: null, createdAt: new Date() };
+  const reply = {
+    id: -1,
+    messageId: message.id,
+    sender: "BOT" as const,
+    body: FALLBACK_REPLY,
+    adminId: null,
+    adminName: null,
+    attachments: null,
+    externalId: null,
+    createdAt: new Date(),
+  };
 
-  if (!botAnswer) {
-    void notifyAdminsNeedsHuman({ messageId: message.id, shop, name: name ?? null, email: email ?? null, body });
-  }
+  void notifyAdminsNeedsHuman({ messageId: message.id, shop, name: name ?? null, email: email ?? null, body });
 
-  getIO().to(ADMINS_ROOM).emit(SocketEvents.NEW_CONVERSATION, { message: { ...message, replies: botAnswer ? [reply] : [] } });
+  getIO().to(ADMINS_ROOM).emit(SocketEvents.NEW_CONVERSATION, { message: { ...message, replies: [] } });
 
   res.status(201).json({ message: { ...message, replies: [reply] } });
 });
@@ -128,19 +118,28 @@ messagesRouter.post("/:id/csat", async (req, res) => {
 messagesRouter.use(requireAuth);
 
 messagesRouter.get("/", async (req, res) => {
-  const { appId, status, mine, source, search, archived, starred, snoozed } = req.query as {
+  const { appId, embeddedAppId, status, mine, source, search, shop, archived, starred, snoozed } = req.query as {
     appId?: string;
+    embeddedAppId?: string;
     status?: string;
     mine?: string;
     source?: string;
     search?: string;
+    shop?: string;
     archived?: string;
     starred?: string;
     snoozed?: string;
   };
 
   const term = search?.trim();
+  const shopTerm = shop?.trim();
   const now = new Date();
+
+  // "Ongoing" bundles OPEN and CLAIMED into one Inbox tab, since both just
+  // mean "not waiting on a human and not closed" from a glance-view's
+  // perspective -- everything else is still a single exact status.
+  const statusFilter =
+    status === "ONGOING" ? { in: ["OPEN", "CLAIMED"] as const } : status ? (status as any) : undefined;
 
   const messages = await prisma.message.findMany({
     where: {
@@ -150,9 +149,10 @@ messagesRouter.get("/", async (req, res) => {
       archived: archived === "true",
       starred: starred === "true" ? true : undefined,
       appId: appId ? Number(appId) : undefined,
-      status: status ? (status as any) : undefined,
+      embeddedAppId: embeddedAppId ? Number(embeddedAppId) : undefined,
+      status: statusFilter,
       assignedAdminId: mine === "true" ? req.admin!.id : undefined,
-      source: source === "WIDGET" || source === "WISHKEEPER" ? source : undefined,
+      source: source === "WIDGET" || source === "WISHKEEPER" || source === "EMBEDDED" ? source : undefined,
       // Each OR-based condition goes in its own AND slot -- a search term
       // and the snooze exclusion both need their own OR, and two top-level
       // OR keys on the same object would just silently overwrite each other.
@@ -161,6 +161,8 @@ messagesRouter.get("/", async (req, res) => {
         // their wake time passes -- ?snoozed=true shows only the ones
         // still waiting, for the Snoozed filter.
         snoozed === "true" ? { snoozedUntil: { gt: now } } : { OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }] },
+        // Separate from the app/shop filters above -- this is the free-text
+        // search box, which still matches across name/email/shop/body.
         term
           ? {
               OR: [
@@ -171,6 +173,7 @@ messagesRouter.get("/", async (req, res) => {
               ],
             }
           : {},
+        shopTerm ? { shop: { contains: shopTerm } } : {},
       ],
     },
     include: {
@@ -207,10 +210,18 @@ messagesRouter.post("/:id/claim", async (req, res) => {
     include: { assignedAdmin: { select: { id: true, name: true } } },
   });
 
-  getIO().to(conversationRoom(id)).emit(SocketEvents.CONVERSATION_CLAIMED, {
+  const io = getIO();
+  io.to(conversationRoom(id)).emit(SocketEvents.CONVERSATION_CLAIMED, {
     conversationId: id,
     admin: updated.assignedAdmin,
   });
+
+  // Lets the customer/merchant's own widget show a "connected" notice the
+  // instant an admin accepts, same as any other message in the thread.
+  const systemReply = await prisma.messageReply.create({
+    data: { messageId: id, sender: "SYSTEM", body: "Admin is connected" },
+  });
+  io.to([conversationRoom(id), ADMINS_ROOM]).emit(SocketEvents.MESSAGE_RECEIVED, systemReply);
 
   res.json({ message: updated });
 });

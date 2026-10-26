@@ -91,26 +91,3 @@ appsRouter.delete("/:id/scripttag", requireRole("SUPER_ADMIN"), async (req, res)
   await prisma.shopifyApp.update({ where: { id }, data: { scriptTagId: null, installMethod: null } });
   res.status(204).send();
 });
-
-// --- Bot keyword management, scoped per Shopify app/store ---
-
-appsRouter.get("/:id/keywords", async (req, res) => {
-  const appId = Number(req.params.id);
-  const keywords = await prisma.botKeyword.findMany({ where: { appId }, orderBy: { createdAt: "asc" } });
-  res.json({ keywords });
-});
-
-appsRouter.post("/:id/keywords", async (req, res) => {
-  const appId = Number(req.params.id);
-  const { keyword, answer } = req.body as { keyword?: string; answer?: string };
-  if (!keyword || !answer) {
-    return res.status(400).json({ error: "keyword and answer are required" });
-  }
-  const entry = await prisma.botKeyword.create({ data: { appId, keyword, answer } });
-  res.status(201).json({ keyword: entry });
-});
-
-appsRouter.delete("/:id/keywords/:keywordId", async (req, res) => {
-  await prisma.botKeyword.delete({ where: { id: Number(req.params.keywordId) } });
-  res.status(204).send();
-});

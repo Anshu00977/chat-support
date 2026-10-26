@@ -10,7 +10,7 @@ export type MessageStatus =
 export type ReplySender = "ADMIN" | "SHOP" | "BOT" | "SYSTEM";
 
 /** WIDGET = storefront customer chat; WISHKEEPER = a WishKeeper merchant's in-admin support chat. */
-export type MessageSource = "WIDGET" | "WISHKEEPER";
+export type MessageSource = "WIDGET" | "WISHKEEPER" | "EMBEDDED";
 
 export interface AdminDTO {
   id: number;

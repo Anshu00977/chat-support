@@ -271,12 +271,18 @@ export function ChatWidget({ apiUrl, shop }: { apiUrl: string; shop: string }) {
                   <div className="csw-drop-overlay">Drop to attach</div>
                 )}
                 <div className="csw-body" ref={bodyRef}>
-                  {conversation.replies.map((r) => (
-                    <div key={r.id} className={`csw-bubble-msg ${r.sender.toLowerCase()}`}>
-                      {r.body && <div>{r.body}</div>}
-                      {r.attachments && r.attachments.length > 0 && <AttachmentList attachments={r.attachments} />}
-                    </div>
-                  ))}
+                  {conversation.replies.map((r) =>
+                    r.sender === "SYSTEM" ? (
+                      <div key={r.id} className="csw-system-divider">
+                        <span>{r.body}</span>
+                      </div>
+                    ) : (
+                      <div key={r.id} className={`csw-bubble-msg ${r.sender.toLowerCase()}`}>
+                        {r.body && <div>{r.body}</div>}
+                        {r.attachments && r.attachments.length > 0 && <AttachmentList attachments={r.attachments} />}
+                      </div>
+                    )
+                  )}
                   {agentTyping && <div className="csw-typing">Agent is typing…</div>}
                 </div>
                 {isClosed ? (

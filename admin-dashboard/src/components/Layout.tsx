@@ -71,6 +71,9 @@ export function Layout({ children }: { children: ReactNode }) {
               Admins
             </NavLink>
           )}
+          <NavLink to="/settings" className={navItem}>
+            Settings
+          </NavLink>
         </nav>
 
         <div className="sidebar-footer">

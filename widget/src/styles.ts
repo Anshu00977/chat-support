@@ -60,6 +60,9 @@ export const widgetStyles = `
 .csw-bubble-msg.shop { align-self: flex-end; background: #2563eb; color: #fff; }
 .csw-bubble-msg.admin, .csw-bubble-msg.bot { align-self: flex-start; background: #eceff3; color: #1a1a1a; }
 .csw-typing { align-self: flex-start; font-size: 0.75rem; color: #888; font-style: italic; }
+.csw-system-divider { align-self: center; display: flex; align-items: center; gap: 0.5rem; width: 100%; max-width: 260px; margin: 0.3rem 0; }
+.csw-system-divider::before, .csw-system-divider::after { content: ""; flex: 1; height: 1px; background: #e5e7eb; }
+.csw-system-divider span { font-size: 0.68rem; color: #9ca3af; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.03em; }
 
 .csw-attachment-list { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.35rem; }
 .csw-attachment-image img { max-width: 180px; max-height: 140px; border-radius: 8px; display: block; }

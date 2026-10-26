@@ -13,6 +13,11 @@ interface AppOption {
   shop: string;
 }
 
+interface EmbeddedAppOption {
+  id: number;
+  name: string;
+}
+
 interface SavedView {
   id: string;
   name: string;
@@ -21,6 +26,7 @@ interface SavedView {
   mineOnly: boolean;
   showArchived: boolean;
   starredOnly?: boolean;
+  shopFilter?: string;
 }
 
 const SAVED_VIEWS_KEY = "inbox-saved-views";
@@ -47,7 +53,13 @@ function loadSavedViews(): SavedView[] {
 
 // Value of the "app" filter that selects WishKeeper merchant threads, which aren't tied to a widget app.
 const WISHKEEPER_FILTER = "wishkeeper";
+// Embedded apps (e.g. ConvoBridge) are filtered by their own id, prefixed so
+// it can't collide with a numeric ShopifyApp id in the same <select>.
+const EMBEDDED_PREFIX = "embedded:";
 
+// BOT_HANDLED is kept only so an old conversation from before the FAQ bot
+// was removed still shows a readable badge -- it's never offered as a
+// filter or counted in the stats bar anymore.
 const STATUS_LABELS: Record<string, string> = {
   OPEN: "Open",
   BOT_HANDLED: "Bot handled",
@@ -56,15 +68,24 @@ const STATUS_LABELS: Record<string, string> = {
   CLOSED: "Closed",
 };
 
+const STATUS_TABS: { value: string; label: string }[] = [
+  { value: "", label: "All" },
+  { value: "NEEDS_HUMAN", label: "Unopened" },
+  { value: "ONGOING", label: "Ongoing" },
+  { value: "CLOSED", label: "Closed" },
+];
+
 export function InboxPage() {
   const { admin } = useAuth();
   const socket = useSocket();
   const [messages, setMessages] = useState<MessageDTO[]>([]);
   const [apps, setApps] = useState<AppOption[]>([]);
+  const [embeddedApps, setEmbeddedApps] = useState<EmbeddedAppOption[]>([]);
   const [appId, setAppId] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [mineOnly, setMineOnly] = useState(false);
   const [search, setSearch] = useState("");
+  const [shopFilter, setShopFilter] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [showSnoozed, setShowSnoozed] = useState(false);
   const [starredOnly, setStarredOnly] = useState(false);
@@ -78,13 +99,16 @@ export function InboxPage() {
 
   const load = async () => {
     setLoading(true);
+    const isEmbedded = appId.startsWith(EMBEDDED_PREFIX);
     const res = await api.get("/messages", {
       params: {
-        appId: appId && appId !== WISHKEEPER_FILTER ? appId : undefined,
-        source: appId === WISHKEEPER_FILTER ? "WISHKEEPER" : undefined,
+        appId: appId && appId !== WISHKEEPER_FILTER && !isEmbedded ? appId : undefined,
+        embeddedAppId: isEmbedded ? appId.slice(EMBEDDED_PREFIX.length) : undefined,
+        source: appId === WISHKEEPER_FILTER ? "WISHKEEPER" : isEmbedded ? "EMBEDDED" : undefined,
         status: status || undefined,
         mine: mineOnly ? "true" : undefined,
         search: search.trim() || undefined,
+        shop: shopFilter.trim() || undefined,
         archived: showArchived ? "true" : undefined,
         snoozed: showSnoozed ? "true" : undefined,
         starred: starredOnly ? "true" : undefined,
@@ -96,6 +120,7 @@ export function InboxPage() {
 
   useEffect(() => {
     api.get("/apps").then((res) => setApps(res.data.apps));
+    api.get("/embedded-apps").then((res) => setEmbeddedApps(res.data.apps));
   }, []);
 
   const toggleNotifications = async () => {
@@ -120,7 +145,7 @@ export function InboxPage() {
   };
 
   const saveCurrentView = (name: string) => {
-    const view: SavedView = { id: crypto.randomUUID(), name, appId, status, mineOnly, showArchived, starredOnly };
+    const view: SavedView = { id: crypto.randomUUID(), name, appId, status, mineOnly, showArchived, starredOnly, shopFilter };
     const next = [...savedViews, view];
     setSavedViews(next);
     localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(next));
@@ -133,6 +158,7 @@ export function InboxPage() {
     setMineOnly(view.mineOnly);
     setShowArchived(view.showArchived);
     setStarredOnly(view.starredOnly ?? false);
+    setShopFilter(view.shopFilter ?? "");
   };
 
   const confirmRemoveView = () => {
@@ -154,7 +180,7 @@ export function InboxPage() {
     const timer = setTimeout(load, 300);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [search, shopFilter]);
 
   // Live inbox: no polling — new conversations and replies push straight into the list.
   useEffect(() => {
@@ -173,7 +199,7 @@ export function InboxPage() {
       socket.off(SocketEvents.CONVERSATION_DELETED, onArchivedOrDeleted);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, appId, status, mineOnly, search, showArchived, showSnoozed, starredOnly]);
+  }, [socket, appId, status, mineOnly, search, shopFilter, showArchived, showSnoozed, starredOnly]);
 
   // Desktop notification on any new conversation, independent of the current
   // filters -- otherwise switching to "My open" would silently stop alerting
@@ -234,27 +260,47 @@ export function InboxPage() {
           <span className="stat-value">{(statCounts.OPEN ?? 0) + (statCounts.CLAIMED ?? 0)}</span>
           <span className="stat-label">Open</span>
         </div>
-        <div className="stat-tile stat-tile--success">
-          <span className="stat-value">{statCounts.BOT_HANDLED ?? 0}</span>
-          <span className="stat-label">Bot handled</span>
-        </div>
         <div className="stat-tile">
           <span className="stat-value">{statCounts.CLOSED ?? 0}</span>
           <span className="stat-label">Closed</span>
         </div>
       </div>
 
+      <div className="status-tabs">
+        {STATUS_TABS.map((t) => (
+          <button
+            key={t.value}
+            className={`status-tab${status === t.value ? " status-tab--active" : ""}`}
+            onClick={() => setStatus(t.value)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="inbox-filters">
         <input
           type="search"
           className="inbox-search"
-          placeholder="Search by name, shop or message…"
+          placeholder="Search by name or message…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+        />
+        <input
+          type="search"
+          className="inbox-search"
+          placeholder="Filter by shop…"
+          value={shopFilter}
+          onChange={(e) => setShopFilter(e.target.value)}
         />
         <select value={appId} onChange={(e) => setAppId(e.target.value)}>
           <option value="">All apps</option>
           <option value={WISHKEEPER_FILTER}>WishKeeper merchants</option>
+          {embeddedApps.map((a) => (
+            <option key={`embedded-${a.id}`} value={`${EMBEDDED_PREFIX}${a.id}`}>
+              {a.name}
+            </option>
+          ))}
           {apps.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name} ({a.shop})
@@ -263,11 +309,13 @@ export function InboxPage() {
         </select>
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">All statuses</option>
-          {Object.entries(STATUS_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
+          {Object.entries(STATUS_LABELS)
+            .filter(([value]) => value !== "BOT_HANDLED")
+            .map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
         </select>
         <label className="checkbox-label">
           <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} />
