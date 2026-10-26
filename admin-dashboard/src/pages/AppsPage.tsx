@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
@@ -16,8 +16,16 @@ export function AppsPage() {
   const [snippetAppId, setSnippetAppId] = useState<number | null>(null);
   const [snippet, setSnippet] = useState("");
   const [copied, setCopied] = useState(false);
+  const snippetPanelRef = useRef<HTMLDivElement>(null);
 
   const loadApps = () => api.get("/apps").then((res) => setApps(res.data.apps));
+
+  // The table can be long (one row per connected shop), so the panel at the
+  // bottom of the page is easy to miss without this -- without it, clicking
+  // "View snippet" looked like nothing happened.
+  useEffect(() => {
+    if (snippetAppId) snippetPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [snippetAppId]);
 
   useEffect(() => {
     loadApps();
@@ -86,7 +94,7 @@ export function AppsPage() {
       </table>
 
       {snippetAppId && (
-        <div className="snippet-panel">
+        <div className="snippet-panel" ref={snippetPanelRef}>
           <h3>Install snippet — {apps.find((a) => a.id === snippetAppId)?.name}</h3>
           <p>
             ScriptTag auto-install isn't available for this app (Shopify restriction). Paste this once into the
