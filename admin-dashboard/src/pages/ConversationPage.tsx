@@ -403,7 +403,7 @@ export function ConversationPage() {
             // it happened, not just the time on each bubble.
             const showDateDivider = i === 0 || dateKey(r.createdAt) !== dateKey(conversation.replies[i - 1].createdAt);
             return (
-              <div key={r.id}>
+              <div key={r.id} className="message-group">
                 {showDateDivider && (
                   <div className="date-divider">
                     <span>{formatDateLabel(r.createdAt)}</span>
