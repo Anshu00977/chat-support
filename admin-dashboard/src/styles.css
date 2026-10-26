@@ -239,6 +239,10 @@ select:focus, input:focus, textarea:focus {
   transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
 }
 .conversation-row:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); border-color: var(--color-primary); }
+.conversation-row--unopened {
+  background: var(--color-primary-light); border-left: 4px solid var(--color-primary); font-weight: 600;
+}
+.conversation-row--unopened .conversation-preview, .conversation-row--unopened .conversation-shop { font-weight: 400; }
 .conversation-row-main { flex: 1; min-width: 0; }
 .conversation-avatar {
   width: 36px; height: 36px; border-radius: 50%; background: var(--color-primary-light); color: var(--color-primary);

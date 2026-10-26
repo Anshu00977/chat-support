@@ -78,8 +78,10 @@ export function InboxPage() {
   const socket = useSocket();
   const [messages, setMessages] = useState<MessageDTO[]>([]);
   const [embeddedApps, setEmbeddedApps] = useState<EmbeddedAppOption[]>([]);
+  const [shops, setShops] = useState<string[]>([]);
   const [appId, setAppId] = useState<string>("");
-  const [status, setStatus] = useState<string>("");
+  // Default view is the one that needs attention, not everything mixed together.
+  const [status, setStatus] = useState<string>("NEEDS_HUMAN");
   const [mineOnly, setMineOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [shopFilter, setShopFilter] = useState("");
@@ -116,6 +118,7 @@ export function InboxPage() {
 
   useEffect(() => {
     api.get("/embedded-apps").then((res) => setEmbeddedApps(res.data.apps));
+    api.get("/messages/shops").then((res) => setShops(res.data.shops));
   }, []);
 
   const toggleNotifications = async () => {
@@ -285,9 +288,15 @@ export function InboxPage() {
           type="search"
           className="inbox-search"
           placeholder="Filter by shop…"
+          list="inbox-shop-options"
           value={shopFilter}
           onChange={(e) => setShopFilter(e.target.value)}
         />
+        <datalist id="inbox-shop-options">
+          {shops.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
         <select value={appId} onChange={(e) => setAppId(e.target.value)}>
           <option value="">All apps</option>
           <option value={WIDGET_FILTER}>Chat Widget</option>
@@ -340,7 +349,10 @@ export function InboxPage() {
         <ul className="conversation-list">
           {messages.map((m) => (
             <li key={m.id}>
-              <Link to={`/conversations/${m.id}`} className="conversation-row">
+              <Link
+                to={`/conversations/${m.id}`}
+                className={`conversation-row${m.status === "NEEDS_HUMAN" ? " conversation-row--unopened" : ""}`}
+              >
                 <button
                   className={`star-btn${m.starred ? " starred" : ""}`}
                   onClick={(e) => toggleStar(e, m.id, m.starred)}

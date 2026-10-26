@@ -117,6 +117,17 @@ messagesRouter.post("/:id/csat", async (req, res) => {
 // --- Everything below is for the admin dashboard ---
 messagesRouter.use(requireAuth);
 
+// Every distinct shop that has ever messaged in, for the Inbox's shop picker --
+// lets an admin pick one from a list instead of only being able to type it.
+messagesRouter.get("/shops", async (_req, res) => {
+  const rows = await prisma.message.findMany({
+    distinct: ["shop"],
+    select: { shop: true },
+    orderBy: { shop: "asc" },
+  });
+  res.json({ shops: rows.map((r) => r.shop) });
+});
+
 messagesRouter.get("/", async (req, res) => {
   const { appId, embeddedAppId, status, mine, source, search, shop, archived, starred, snoozed } = req.query as {
     appId?: string;
