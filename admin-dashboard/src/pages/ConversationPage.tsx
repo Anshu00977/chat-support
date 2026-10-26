@@ -54,6 +54,8 @@ export function ConversationPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmingClose, setConfirmingClose] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [noteMode, setNoteMode] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -235,6 +237,16 @@ export function ConversationPage() {
     setConversation((prev) => (prev ? { ...prev, ...res.data.message } : res.data.message));
   };
 
+  const confirmClose = async () => {
+    setClosing(true);
+    try {
+      await close();
+    } finally {
+      setClosing(false);
+      setConfirmingClose(false);
+    }
+  };
+
   const close = async () => {
     const res = await api.post(`/messages/${conversationId}/close`);
     setConversation((prev) => (prev ? { ...prev, ...res.data.message } : res.data.message));
@@ -348,7 +360,7 @@ export function ConversationPage() {
                 ))}
             </select>
           )}
-          {!isClosed && <button onClick={close}>Close</button>}
+          {!isClosed && <button onClick={() => setConfirmingClose(true)}>Close</button>}
           {conversation.snoozedUntil ? (
             <button className="btn-ghost" onClick={unsnooze}>
               Unsnooze
@@ -521,6 +533,17 @@ export function ConversationPage() {
           busy={deleting}
           onConfirm={confirmRemove}
           onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
+
+      {confirmingClose && (
+        <ConfirmDialog
+          title="Close this conversation?"
+          message={`${customerLabel} won't be able to send another message until this is reopened.`}
+          confirmLabel="Close"
+          busy={closing}
+          onConfirm={confirmClose}
+          onCancel={() => setConfirmingClose(false)}
         />
       )}
     </div>
