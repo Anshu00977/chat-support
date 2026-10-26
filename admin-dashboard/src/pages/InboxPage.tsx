@@ -78,7 +78,7 @@ export function InboxPage() {
   const socket = useSocket();
   const [messages, setMessages] = useState<MessageDTO[]>([]);
   const [embeddedApps, setEmbeddedApps] = useState<EmbeddedAppOption[]>([]);
-  const [shops, setShops] = useState<string[]>([]);
+  const [shops, setShops] = useState<{ shop: string; name: string }[]>([]);
   const [appId, setAppId] = useState<string>("");
   // Default view is the one that needs attention, not everything mixed together.
   const [status, setStatus] = useState<string>("NEEDS_HUMAN");
@@ -290,7 +290,9 @@ export function InboxPage() {
         />
         <datalist id="inbox-shop-options">
           {shops.map((s) => (
-            <option key={s} value={s} />
+            <option key={s.shop} value={s.shop}>
+              {s.name}
+            </option>
           ))}
         </datalist>
         <select value={appId} onChange={(e) => setAppId(e.target.value)}>

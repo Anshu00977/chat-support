@@ -117,15 +117,28 @@ messagesRouter.post("/:id/csat", async (req, res) => {
 // --- Everything below is for the admin dashboard ---
 messagesRouter.use(requireAuth);
 
+function prettyShopName(shop: string) {
+  const base = shop.replace(/\.myshopify\.com$/, "");
+  return base
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 // Every distinct shop that has ever messaged in, for the Inbox's shop picker --
 // lets an admin pick one from a list instead of only being able to type it.
+// Widget-installed shops get their real registered store name; everything
+// else falls back to a title-cased version of the shop domain, since that's
+// all we have for WishKeeper/embedded-app merchants.
 messagesRouter.get("/shops", async (_req, res) => {
-  const rows = await prisma.message.findMany({
-    distinct: ["shop"],
-    select: { shop: true },
-    orderBy: { shop: "asc" },
-  });
-  res.json({ shops: rows.map((r) => r.shop) });
+  const [shopRows, apps] = await Promise.all([
+    prisma.message.findMany({ distinct: ["shop"], select: { shop: true }, orderBy: { shop: "asc" } }),
+    prisma.shopifyApp.findMany({ select: { shop: true, name: true } }),
+  ]);
+  const appNameByShop = new Map(apps.map((a) => [a.shop, a.name]));
+  const shops = shopRows.map((r) => ({ shop: r.shop, name: appNameByShop.get(r.shop) ?? prettyShopName(r.shop) }));
+  res.json({ shops });
 });
 
 messagesRouter.get("/", async (req, res) => {

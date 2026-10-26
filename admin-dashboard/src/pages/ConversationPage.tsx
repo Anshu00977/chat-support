@@ -39,6 +39,7 @@ export function ConversationPage() {
   const [sending, setSending] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [noteMode, setNoteMode] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -253,12 +254,20 @@ export function ConversationPage() {
 
   const confirmRemove = async () => {
     setDeleting(true);
+    setDeleteError(null);
     try {
       await api.delete(`/messages/${conversationId}`);
+      // Navigates away -- the Inbox remounts fresh and re-fetches, so the
+      // deleted conversation is simply gone from the list it loads, not
+      // something that needs clearing out of local state by hand.
       navigate("/");
-    } finally {
-      setDeleting(false);
+    } catch (err: any) {
+      // Deletion failed (e.g. a permissions or network error) -- previously
+      // this failed silently: the dialog just closed with no redirect and
+      // no explanation, which looked like the button did nothing.
+      setDeleteError(err.response?.data?.error ?? "Failed to delete this conversation. Please try again.");
       setConfirmingDelete(false);
+      setDeleting(false);
     }
   };
 
@@ -278,6 +287,7 @@ export function ConversationPage() {
 
   return (
     <div className="conversation-page">
+      {deleteError && <div className="error-banner conversation-delete-error">{deleteError}</div>}
       <div className="conversation-header">
         <div>
           <h2>
