@@ -7,12 +7,6 @@ import { useAuth } from "../context/AuthContext";
 import { PromptDialog } from "../components/PromptDialog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 
-interface AppOption {
-  id: number;
-  name: string;
-  shop: string;
-}
-
 interface EmbeddedAppOption {
   id: number;
   name: string;
@@ -53,6 +47,10 @@ function loadSavedViews(): SavedView[] {
 
 // Value of the "app" filter that selects WishKeeper merchant threads, which aren't tied to a widget app.
 const WISHKEEPER_FILTER = "wishkeeper";
+// Selects every storefront Chat Widget conversation, across all shops that installed it --
+// the dropdown shows product types, not one entry per individual shop (that's what the
+// separate "Filter by shop" box is for).
+const WIDGET_FILTER = "widget";
 // Embedded apps (e.g. ConvoBridge) are filtered by their own id, prefixed so
 // it can't collide with a numeric ShopifyApp id in the same <select>.
 const EMBEDDED_PREFIX = "embedded:";
@@ -79,7 +77,6 @@ export function InboxPage() {
   const { admin } = useAuth();
   const socket = useSocket();
   const [messages, setMessages] = useState<MessageDTO[]>([]);
-  const [apps, setApps] = useState<AppOption[]>([]);
   const [embeddedApps, setEmbeddedApps] = useState<EmbeddedAppOption[]>([]);
   const [appId, setAppId] = useState<string>("");
   const [status, setStatus] = useState<string>("");
@@ -102,9 +99,8 @@ export function InboxPage() {
     const isEmbedded = appId.startsWith(EMBEDDED_PREFIX);
     const res = await api.get("/messages", {
       params: {
-        appId: appId && appId !== WISHKEEPER_FILTER && !isEmbedded ? appId : undefined,
         embeddedAppId: isEmbedded ? appId.slice(EMBEDDED_PREFIX.length) : undefined,
-        source: appId === WISHKEEPER_FILTER ? "WISHKEEPER" : isEmbedded ? "EMBEDDED" : undefined,
+        source: appId === WISHKEEPER_FILTER ? "WISHKEEPER" : appId === WIDGET_FILTER ? "WIDGET" : isEmbedded ? "EMBEDDED" : undefined,
         status: status || undefined,
         mine: mineOnly ? "true" : undefined,
         search: search.trim() || undefined,
@@ -119,7 +115,6 @@ export function InboxPage() {
   };
 
   useEffect(() => {
-    api.get("/apps").then((res) => setApps(res.data.apps));
     api.get("/embedded-apps").then((res) => setEmbeddedApps(res.data.apps));
   }, []);
 
@@ -295,15 +290,11 @@ export function InboxPage() {
         />
         <select value={appId} onChange={(e) => setAppId(e.target.value)}>
           <option value="">All apps</option>
+          <option value={WIDGET_FILTER}>Chat Widget</option>
           <option value={WISHKEEPER_FILTER}>WishKeeper merchants</option>
           {embeddedApps.map((a) => (
             <option key={`embedded-${a.id}`} value={`${EMBEDDED_PREFIX}${a.id}`}>
               {a.name}
-            </option>
-          ))}
-          {apps.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name} ({a.shop})
             </option>
           ))}
         </select>
