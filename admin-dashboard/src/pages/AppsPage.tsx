@@ -16,6 +16,14 @@ export function AppsPage() {
   const [snippetAppId, setSnippetAppId] = useState<number | null>(null);
   const [snippet, setSnippet] = useState("");
   const [copied, setCopied] = useState(false);
+  const [shopSearch, setShopSearch] = useState("");
+
+  const filteredApps = apps.filter(
+    (a) =>
+      !shopSearch.trim() ||
+      a.name.toLowerCase().includes(shopSearch.trim().toLowerCase()) ||
+      a.shop.toLowerCase().includes(shopSearch.trim().toLowerCase())
+  );
 
   const loadApps = () => api.get("/apps").then((res) => setApps(res.data.apps));
 
@@ -52,38 +60,56 @@ export function AppsPage() {
 
   return (
     <div className="apps-page">
-      <h2>Connected Shopify apps</h2>
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Shop</th>
-            <th>Widget status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {apps.map((a) => (
-            <tr key={a.id}>
-              <td>{a.name}</td>
-              <td>{a.shop}</td>
-              <td>
-                {a.installMethod === "manual"
-                  ? "Needs manual snippet paste"
-                  : a.installMethod === "scripttag"
-                    ? "Widget live (script tag)"
-                    : "Not installed"}
-              </td>
-              <td>
-                {admin?.role === "SUPER_ADMIN" && !a.installMethod && (
-                  <button onClick={() => registerScriptTag(a.id)}>Install widget</button>
-                )}
-                {a.installMethod === "manual" && <button onClick={() => viewSnippet(a.id)}>View snippet</button>}
-              </td>
+      <h2>Apps</h2>
+
+      {/* The rows below are every SHOP that installed this one product (the
+          storefront Chat Widget) -- not separate apps. Grouped under a
+          single product card so it doesn't read as a flat list of "apps". */}
+      <details className="app-product-card" open>
+        <summary>
+          💬 Chat Widget <span className="app-product-count">{apps.length} shop{apps.length === 1 ? "" : "s"} connected</span>
+        </summary>
+
+        <input
+          type="search"
+          className="inbox-search app-product-search"
+          placeholder="Search by shop name or domain…"
+          value={shopSearch}
+          onChange={(e) => setShopSearch(e.target.value)}
+        />
+
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Shop</th>
+              <th>Domain</th>
+              <th>Widget status</th>
+              <th></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {filteredApps.map((a) => (
+              <tr key={a.id}>
+                <td>{a.name}</td>
+                <td>{a.shop}</td>
+                <td>
+                  {a.installMethod === "manual"
+                    ? "Needs manual snippet paste"
+                    : a.installMethod === "scripttag"
+                      ? "Widget live (script tag)"
+                      : "Not installed"}
+                </td>
+                <td>
+                  {admin?.role === "SUPER_ADMIN" && !a.installMethod && (
+                    <button onClick={() => registerScriptTag(a.id)}>Install widget</button>
+                  )}
+                  {a.installMethod === "manual" && <button onClick={() => viewSnippet(a.id)}>View snippet</button>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
 
       {snippetAppId && (
         <div className="modal-overlay" onClick={() => setSnippetAppId(null)}>
