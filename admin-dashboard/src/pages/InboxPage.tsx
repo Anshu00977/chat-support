@@ -250,10 +250,6 @@ export function InboxPage() {
           <span className="stat-value">{messages.length}</span>
           <span className="stat-label">In view</span>
         </div>
-        <div className="stat-tile stat-tile--warning">
-          <span className="stat-value">{statCounts.NEEDS_HUMAN ?? 0}</span>
-          <span className="stat-label">Needs human</span>
-        </div>
         <div className="stat-tile stat-tile--info">
           <span className="stat-value">{(statCounts.OPEN ?? 0) + (statCounts.CLAIMED ?? 0)}</span>
           <span className="stat-label">Open</span>
@@ -310,7 +306,9 @@ export function InboxPage() {
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">All statuses</option>
           {Object.entries(STATUS_LABELS)
-            .filter(([value]) => value !== "BOT_HANDLED")
+            // BOT_HANDLED: no FAQ bot anymore. NEEDS_HUMAN: already covered
+            // by the "Unopened" tab above, kept here only as a filter value.
+            .filter(([value]) => value !== "BOT_HANDLED" && value !== "NEEDS_HUMAN")
             .map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
