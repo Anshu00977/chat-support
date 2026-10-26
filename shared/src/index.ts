@@ -40,9 +40,43 @@ export interface MessageReplyDTO {
   createdAt: string;
 }
 
+/** "mystore.myshopify.com" -> "Mystore", used wherever a shop has no registered display name. */
+export function formatShopName(shop: string): string {
+  const base = shop.replace(/\.myshopify\.com$/, "");
+  return base
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+type ConversationLabelInput = Pick<MessageDTO, "source" | "shop" | "name" | "app" | "embeddedApp">;
+
+/** Which product/integration this conversation came through -- WishKeeper, an embedded app, or the storefront widget. */
+export function conversationAppLabel(m: Pick<ConversationLabelInput, "source" | "embeddedApp">): string {
+  if (m.source === "WISHKEEPER") return "WishKeeper";
+  if (m.source === "EMBEDDED") return m.embeddedApp?.name ?? "Embedded app";
+  return "Chat Widget";
+}
+
+/**
+ * Full display label for a conversation row: App · Store [· Chatter name].
+ * The chatter name only applies to the storefront widget -- WishKeeper and
+ * embedded-app conversations are with the store itself, not an individual.
+ */
+export function conversationLabel(m: ConversationLabelInput): string {
+  const app = conversationAppLabel(m);
+  const store = m.app?.name ?? formatShopName(m.shop);
+  if (m.source !== "WIDGET") return `${app} · ${store}`;
+  return `${app} · ${store} · ${m.name?.trim() || "Anonymous visitor"}`;
+}
+
 export interface MessageDTO {
   id: number;
   appId: number | null;
+  app: { name: string } | null;
+  embeddedAppId: number | null;
+  embeddedApp: { name: string } | null;
   source: MessageSource;
   shop: string;
   name: string | null;

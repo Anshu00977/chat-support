@@ -202,6 +202,8 @@ messagesRouter.get("/", async (req, res) => {
     },
     include: {
       assignedAdmin: { select: { id: true, name: true } },
+      app: { select: { name: true } },
+      embeddedApp: { select: { name: true } },
       replies: { orderBy: { createdAt: "desc" as const }, take: 1 },
     },
     orderBy: { updatedAt: "desc" },
@@ -214,7 +216,12 @@ messagesRouter.get("/:id", async (req, res) => {
   const id = Number(req.params.id);
   const message = await prisma.message.findUnique({
     where: { id },
-    include: { ...replyInclude, assignedAdmin: { select: { id: true, name: true } } },
+    include: {
+      ...replyInclude,
+      assignedAdmin: { select: { id: true, name: true } },
+      app: { select: { name: true } },
+      embeddedApp: { select: { name: true } },
+    },
   });
   if (!message) return res.status(404).json({ error: "Conversation not found" });
   res.json({ message });

@@ -297,6 +297,12 @@ select:focus, input:focus, textarea:focus {
 .system-divider::before, .system-divider::after { content: ""; flex: 1; height: 1px; background: var(--color-border); }
 .system-divider span { font-size: 0.72rem; color: var(--color-text-muted); white-space: nowrap; text-transform: uppercase; letter-spacing: 0.03em; }
 
+.date-divider { display: flex; justify-content: center; margin: 0.8rem 0 0.4rem; }
+.date-divider span {
+  font-size: 0.7rem; font-weight: 600; color: var(--color-text-muted); background: var(--color-neutral-bg);
+  padding: 0.25rem 0.7rem; border-radius: 999px;
+}
+
 .attachment-list { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.35rem; }
 .attachment-image img { max-width: 220px; max-height: 160px; border-radius: var(--radius-sm); display: block; }
 .attachment-file {

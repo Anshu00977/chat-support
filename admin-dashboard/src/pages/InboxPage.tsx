@@ -1,6 +1,6 @@
 import { useEffect, useState, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
-import { SocketEvents, type MessageDTO } from "@chat-support/shared";
+import { SocketEvents, conversationLabel, type MessageDTO } from "@chat-support/shared";
 import { api } from "../api/client";
 import { useSocket } from "../context/SocketContext";
 import { useAuth } from "../context/AuthContext";
@@ -364,7 +364,7 @@ export function InboxPage() {
                 <div className="conversation-avatar">{initials(m.name || m.shop || "?")}</div>
                 <div className="conversation-row-main">
                   <div className="conversation-row-top">
-                    <span className="conversation-name">{m.name || m.email || "Anonymous visitor"}</span>
+                    <span className="conversation-name">{conversationLabel(m)}</span>
                     <span className="conversation-badges">
                       {m.source === "WISHKEEPER" && <span className="badge badge-wishkeeper">WishKeeper</span>}
                       {m.archived && <span className="badge badge-archived">Archived</span>}

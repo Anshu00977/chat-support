@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { SocketEvents, type Attachment, type MessageDTO, type MessageReplyDTO } from "@chat-support/shared";
+import { SocketEvents, conversationLabel, type Attachment, type MessageDTO, type MessageReplyDTO } from "@chat-support/shared";
 import { api } from "../api/client";
 import { uploadFile } from "../api/uploads";
 import { useSocket } from "../context/SocketContext";
@@ -21,6 +21,20 @@ interface CannedReply {
 }
 
 const TYPING_STOP_DELAY_MS = 2000;
+
+function dateKey(d: string | Date) {
+  return new Date(d).toDateString();
+}
+
+function formatDateLabel(d: string | Date) {
+  const date = new Date(d);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (dateKey(date) === dateKey(today)) return "Today";
+  if (dateKey(date) === dateKey(yesterday)) return "Yesterday";
+  return date.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
+}
 
 export function ConversationPage() {
   const { id } = useParams();
@@ -294,7 +308,7 @@ export function ConversationPage() {
             <button className={`star-btn${conversation.starred ? " starred" : ""}`} onClick={toggleStar} title={conversation.starred ? "Unstar" : "Star"} aria-label={conversation.starred ? "Unstar" : "Star"}>
               {conversation.starred ? "⭐" : "☆"}
             </button>{" "}
-            {conversation.name || conversation.email || "Anonymous visitor"}
+            {conversationLabel(conversation)}
           </h2>
           <p className="muted">
             {conversation.source === "WISHKEEPER" && <span className="badge badge-wishkeeper">WishKeeper</span>} {conversation.shop} · <span className={`badge badge-${conversation.status.toLowerCase()}`}>{conversation.status.replace("_", " ")}</span>
@@ -383,25 +397,46 @@ export function ConversationPage() {
         {dragging && !isClosed && <div className="drop-overlay">Drop to attach</div>}
 
         <div className="message-list">
-          {conversation.replies.map((r) =>
-            r.sender === "SYSTEM" ? (
-              <div key={r.id} className="system-divider">
-                <span>{r.body}</span>
+          {conversation.replies.map((r, i) => {
+            // A date divider at the very start and whenever the day changes,
+            // so a long-running conversation always shows when each part of
+            // it happened, not just the time on each bubble.
+            const showDateDivider = i === 0 || dateKey(r.createdAt) !== dateKey(conversation.replies[i - 1].createdAt);
+            return (
+              <div key={r.id}>
+                {showDateDivider && (
+                  <div className="date-divider">
+                    <span>{formatDateLabel(r.createdAt)}</span>
+                  </div>
+                )}
+                {r.sender === "SYSTEM" ? (
+                  <div className="system-divider">
+                    <span>{r.body}</span>
+                  </div>
+                ) : (
+                  <div className={`bubble bubble-${r.sender.toLowerCase()}${r.internal ? " bubble-internal" : ""}`}>
+                    <div className="bubble-meta">
+                      {r.internal && "🔒 "}
+                      {r.sender === "ADMIN" ? r.adminName ?? "Admin" : r.sender === "BOT" ? "Bot" : customerLabel}
+                      {r.internal && " · internal note"}
+                    </div>
+                    {r.body && <div className="bubble-body">{r.body}</div>}
+                    {r.attachments && r.attachments.length > 0 && <AttachmentList attachments={r.attachments} />}
+                    <div className="bubble-time">
+                      {new Date(r.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </div>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div key={r.id} className={`bubble bubble-${r.sender.toLowerCase()}${r.internal ? " bubble-internal" : ""}`}>
-                <div className="bubble-meta">
-                  {r.internal && "🔒 "}
-                  {r.sender === "ADMIN" ? r.adminName ?? "Admin" : r.sender === "BOT" ? "Bot" : customerLabel}
-                  {r.internal && " · internal note"}
-                </div>
-                {r.body && <div className="bubble-body">{r.body}</div>}
-                {r.attachments && r.attachments.length > 0 && <AttachmentList attachments={r.attachments} />}
-                <div className="bubble-time">
-                  {new Date(r.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </div>
-              </div>
-            )
+            );
+          })}
+          {isClosed && (
+            <div className="system-divider">
+              <span>
+                Closed {formatDateLabel(conversation.updatedAt)} ·{" "}
+                {new Date(conversation.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            </div>
           )}
           {customerTyping && <div className="typing-indicator">{customerLabel} is typing…</div>}
           <div ref={bottomRef} />
