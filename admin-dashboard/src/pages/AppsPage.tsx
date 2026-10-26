@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
@@ -16,16 +16,8 @@ export function AppsPage() {
   const [snippetAppId, setSnippetAppId] = useState<number | null>(null);
   const [snippet, setSnippet] = useState("");
   const [copied, setCopied] = useState(false);
-  const snippetPanelRef = useRef<HTMLDivElement>(null);
 
   const loadApps = () => api.get("/apps").then((res) => setApps(res.data.apps));
-
-  // The table can be long (one row per connected shop), so the panel at the
-  // bottom of the page is easy to miss without this -- without it, clicking
-  // "View snippet" looked like nothing happened.
-  useEffect(() => {
-    if (snippetAppId) snippetPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [snippetAppId]);
 
   useEffect(() => {
     loadApps();
@@ -94,17 +86,21 @@ export function AppsPage() {
       </table>
 
       {snippetAppId && (
-        <div className="snippet-panel" ref={snippetPanelRef}>
-          <h3>Install snippet — {apps.find((a) => a.id === snippetAppId)?.name}</h3>
-          <p>
-            ScriptTag auto-install isn't available for this app (Shopify restriction). Paste this once into the
-            store's <code>theme.liquid</code>, right before <code>&lt;/body&gt;</code>, and the widget shows up
-            immediately — no further setup needed after that.
-          </p>
-          <textarea readOnly value={snippet} rows={2} onClick={(e) => e.currentTarget.select()} />
-          <div className="snippet-actions">
-            <button onClick={copySnippet}>{copied ? "Copied!" : "Copy snippet"}</button>
-            <button onClick={() => setSnippetAppId(null)}>Close</button>
+        <div className="modal-overlay" onClick={() => setSnippetAppId(null)}>
+          <div className="modal-card modal-card--wide" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="snippet-title">
+            <h3 id="snippet-title">Install snippet — {apps.find((a) => a.id === snippetAppId)?.name}</h3>
+            <p>
+              ScriptTag auto-install isn't available for this app (Shopify restriction). Paste this once into the
+              store's <code>theme.liquid</code>, right before <code>&lt;/body&gt;</code>, and the widget shows up
+              immediately — no further setup needed after that.
+            </p>
+            <textarea readOnly value={snippet} rows={2} onClick={(e) => e.currentTarget.select()} />
+            <div className="modal-actions">
+              <button className="btn-ghost" onClick={() => setSnippetAppId(null)} autoFocus>
+                Close
+              </button>
+              <button onClick={copySnippet}>{copied ? "Copied!" : "Copy snippet"}</button>
+            </div>
           </div>
         </div>
       )}
