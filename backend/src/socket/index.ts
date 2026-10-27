@@ -7,7 +7,7 @@ import { verifyAdminToken } from "../utils/jwt";
 import { setIO } from "./ioInstance";
 import { setupTypingHandlers } from "./typing";
 import { sendWishkeeperAdminReply } from "../services/wishkeeper.service";
-import { sendEmbeddedAdminReply } from "../services/embeddedChat.service";
+import { sendEmbeddedAdminReply, getEmbeddedAppById } from "../services/embeddedChat.service";
 
 interface SocketData {
   adminId?: number;
@@ -129,13 +129,19 @@ export function initSocket(httpServer: HttpServer): Server {
           // Same idea, generalized for any other app connected via EmbeddedApp.
           if (conversation.source === "EMBEDDED") {
             if (sender !== "ADMIN" || !data.adminId) throw new Error("Only admins can reply to this conversation");
-            const replies = await sendEmbeddedAdminReply({
-              conversation,
-              admin: { id: data.adminId, name: adminName ?? null },
-              body: body ?? "",
-              attachments: attachments ?? [],
-            });
-            return replies[replies.length - 1];
+            const embeddedApp = conversation.embeddedAppId ? await getEmbeddedAppById(conversation.embeddedAppId) : null;
+            if (embeddedApp?.databaseUrl) {
+              // Old path: app keeps its own mirrored DB, push the reply there too.
+              const replies = await sendEmbeddedAdminReply({
+                conversation,
+                admin: { id: data.adminId, name: adminName ?? null },
+                body: body ?? "",
+                attachments: attachments ?? [],
+              });
+              return replies[replies.length - 1];
+            }
+            // DB-less path: conversation lives entirely in Supportly's own tables.
+            // Fall through to the standard reply-creation logic below.
           }
 
           const reply = await prisma.messageReply.create({

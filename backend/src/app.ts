@@ -15,6 +15,7 @@ import { embeddedChatRouter } from "./routes/embeddedChat.routes";
 import { cannedRepliesRouter } from "./routes/cannedReplies.routes";
 import { analyticsRouter } from "./routes/analytics.routes";
 import { embeddedAppsRouter } from "./routes/embeddedApps.routes";
+import { embeddedDirectRouter } from "./routes/embeddedDirect.routes";
 
 export function createApp() {
   const app = express();
@@ -35,6 +36,8 @@ export function createApp() {
   app.use("/", wishkeeperRouter);
   // Generic version for every other connected app (/embedded/internal/*, /embedded-files/*).
   app.use("/", embeddedChatRouter);
+  // DB-less direct polling endpoints for apps with no databaseUrl (/embedded/thread/*).
+  app.use("/", embeddedDirectRouter);
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
   app.get("/", (_req, res) => res.redirect("/admin/"));

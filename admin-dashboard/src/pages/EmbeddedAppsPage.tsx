@@ -65,8 +65,9 @@ export function EmbeddedAppsPage() {
       <div className="page-header">
         <h2>Embedded apps</h2>
         <p className="muted">
-          Connects an app's own in-admin merchant chat (same pattern as WishKeeper's) to this dashboard, without
-          needing any code changes here per app. One connection serves every shop that installs that app.
+          Connects an app's merchant support chat to this dashboard. One connection serves every shop that installs
+          that app. Leave "Database URL" blank to use DB-less mode — the conversation lives here in Supportly and
+          the app's widget polls <code>/embedded/thread/*</code> directly instead of its own database.
         </p>
       </div>
 
@@ -108,10 +109,9 @@ export function EmbeddedAppsPage() {
           required
         />
         <input
-          placeholder="Database URL (mysql://...)"
+          placeholder="Database URL (mysql://...) — leave blank for DB-less mode"
           value={databaseUrl}
           onChange={(e) => setDatabaseUrl(e.target.value)}
-          required
         />
         <input
           placeholder='Shown as reply sender (default "Support")'

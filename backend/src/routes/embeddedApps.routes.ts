@@ -20,19 +20,19 @@ embeddedAppsRouter.get("/", async (_req, res) => {
 embeddedAppsRouter.post("/", requireRole("SUPER_ADMIN"), async (req, res) => {
   const { name, databaseUrl, appUrl, adminDisplayName } = req.body as {
     name?: string;
-    databaseUrl?: string;
+    databaseUrl?: string; // optional: null/absent = DB-less path (conversation lives in Supportly)
     appUrl?: string;
     adminDisplayName?: string;
   };
-  if (!name?.trim() || !databaseUrl?.trim() || !appUrl?.trim()) {
-    return res.status(400).json({ error: "name, databaseUrl and appUrl are required" });
+  if (!name?.trim() || !appUrl?.trim()) {
+    return res.status(400).json({ error: "name and appUrl are required" });
   }
 
   const internalSecret = crypto.randomBytes(24).toString("hex");
   const app = await prisma.embeddedApp.create({
     data: {
       name: name.trim(),
-      databaseUrl: databaseUrl.trim(),
+      databaseUrl: databaseUrl?.trim() || null,
       appUrl: appUrl.trim().replace(/\/$/, ""),
       internalSecret,
       adminDisplayName: adminDisplayName?.trim() || "Support",

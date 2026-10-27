@@ -5,6 +5,7 @@ import { env } from "../config/env";
 import { prisma } from "../prisma";
 import { getIO } from "../socket/ioInstance";
 import { notifyAdminsNeedsHuman } from "./mail.service";
+import { setDirectAdminTyping } from "./embeddedDirect.service";
 
 /**
  * Generic embedded merchant-chat integration -- the same contract
@@ -35,7 +36,7 @@ import { notifyAdminsNeedsHuman } from "./mail.service";
 interface EmbeddedAppRow {
   id: number;
   name: string;
-  databaseUrl: string;
+  databaseUrl: string | null; // null = DB-less app, see embeddedDirect.service.ts
   appUrl: string;
   internalSecret: string;
   adminDisplayName: string;
@@ -60,7 +61,7 @@ function invalidateApp(row: EmbeddedAppRow) {
   appCacheBySecret.delete(row.internalSecret);
 }
 
-async function getEmbeddedAppById(id: number): Promise<EmbeddedAppRow | null> {
+export async function getEmbeddedAppById(id: number): Promise<EmbeddedAppRow | null> {
   const cached = appCacheById.get(id);
   if (cached && Date.now() - cached.fetchedAt < APP_CACHE_TTL_MS) return cached.row;
 
@@ -73,7 +74,7 @@ async function getEmbeddedAppById(id: number): Promise<EmbeddedAppRow | null> {
   return row;
 }
 
-async function getEmbeddedAppBySecret(secret: string): Promise<EmbeddedAppRow | null> {
+export async function getEmbeddedAppBySecret(secret: string): Promise<EmbeddedAppRow | null> {
   const cached = appCacheBySecret.get(secret);
   if (cached && Date.now() - cached.fetchedAt < APP_CACHE_TTL_MS) return cached.row;
 
@@ -84,6 +85,7 @@ async function getEmbeddedAppBySecret(secret: string): Promise<EmbeddedAppRow | 
 }
 
 function getAppDb(row: EmbeddedAppRow): PrismaClient {
+  if (!row.databaseUrl) throw new Error(`${row.name} has no database of its own -- use embeddedDirect.service.ts instead`);
   let db = dbCache.get(row.id);
   if (!db) {
     db = new PrismaClient({ datasourceUrl: row.databaseUrl });
@@ -396,6 +398,10 @@ export async function forwardEmbeddedTyping(conversationId: number) {
 
   const app = await getEmbeddedAppById(info.embeddedAppId);
   if (!app) return;
+  if (!app.databaseUrl) {
+    await setDirectAdminTyping(conversationId);
+    return;
+  }
   const db = getAppDb(app);
   await db.$executeRaw`UPDATE SupportThread SET adminTypingAt = ${new Date()} WHERE shop = ${info.shop}`;
 }
@@ -406,7 +412,7 @@ export async function setEmbeddedThreadClosed(
 ) {
   if (!conversation.embeddedAppId) return;
   const app = await getEmbeddedAppById(conversation.embeddedAppId);
-  if (!app) return;
+  if (!app || !app.databaseUrl) return; // DB-less: status on our own Message row IS the closed state, nothing to propagate
   const db = getAppDb(app);
   await db.$executeRaw`UPDATE SupportThread SET closedAt = ${closed ? new Date() : null} WHERE shop = ${conversation.shop}`;
 }
