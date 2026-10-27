@@ -424,10 +424,14 @@ export async function recordEmbeddedReset(shop: string) {
   const reply = await prisma.messageReply.create({
     data: { messageId: conversationId, sender: "SYSTEM", body: "Merchant started a new conversation" },
   });
-  await prisma.message.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });
+  await prisma.message.update({
+    where: { id: conversationId },
+    data: { status: "NEEDS_HUMAN", assignedAdminId: null, updatedAt: new Date() },
+  });
 
   const io = getIO();
   io.to([conversationRoom(conversationId), ADMINS_ROOM]).emit(SocketEvents.MESSAGE_RECEIVED, reply);
+  io.to(ADMINS_ROOM).emit(SocketEvents.NEW_CONVERSATION, { message: { id: conversationId } });
 }
 
 export async function findEmbeddedConversationId(shop: string): Promise<number | null> {
