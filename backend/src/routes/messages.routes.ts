@@ -5,7 +5,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import { notifyAdminsNeedsHuman } from "../services/mail.service";
 import { getIO } from "../socket/ioInstance";
 import { setWishkeeperThreadClosed } from "../services/wishkeeper.service";
-import { setEmbeddedThreadClosed } from "../services/embeddedChat.service";
+import { setEmbeddedThreadClosed, sendEmbeddedSystemNotice } from "../services/embeddedChat.service";
 
 export const messagesRouter = Router();
 
@@ -253,6 +253,14 @@ messagesRouter.post("/:id/claim", async (req, res) => {
     data: { messageId: id, sender: "SYSTEM", body: "Admin is connected" },
   });
   io.to([conversationRoom(id), ADMINS_ROOM]).emit(SocketEvents.MESSAGE_RECEIVED, systemReply);
+
+  // Push the notice into the app's own SupportMessage table so the merchant's
+  // widget sees it on its next poll (only for EMBEDDED apps with their own DB).
+  if (message.source === "EMBEDDED") {
+    void sendEmbeddedSystemNotice(message, "Admin is connected").catch((err) =>
+      console.error("Failed to push system notice to embedded app:", err)
+    );
+  }
 
   res.json({ message: updated });
 });

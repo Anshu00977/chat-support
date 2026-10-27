@@ -371,6 +371,26 @@ export async function sendEmbeddedAdminReply(params: {
   return replies;
 }
 
+/** Writes a system notice (e.g. "Admin is connected") into the app's own SupportMessage table so the merchant's widget shows it immediately on the next poll. */
+export async function sendEmbeddedSystemNotice(
+  conversation: { id: number; shop: string; embeddedAppId: number | null; externalThreadId: string | null },
+  body: string
+): Promise<void> {
+  if (!conversation.embeddedAppId || !conversation.externalThreadId) return;
+  const app = await getEmbeddedAppById(conversation.embeddedAppId);
+  if (!app?.databaseUrl) return; // DB-less apps don't need this — the MessageReply in our own table is already visible
+  const db = getAppDb(app);
+  const id = crypto.randomUUID();
+  const now = new Date();
+  await db.$executeRaw`
+    INSERT INTO SupportMessage (id, threadId, sender, body, createdAt)
+    VALUES (${id}, ${conversation.externalThreadId}, 'system', ${body}, ${now})`;
+  void pushToEmbeddedApp(app, {
+    shop: conversation.shop,
+    message: { id, threadId: conversation.externalThreadId, sender: "system", body, createdAt: now.toISOString() },
+  });
+}
+
 const appByConversation = new Map<number, { shop: string; embeddedAppId: number } | null>();
 const lastTypingPush = new Map<number, number>();
 const TYPING_PUSH_INTERVAL_MS = 2000;
