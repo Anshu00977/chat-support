@@ -413,7 +413,11 @@ export function ConversationPage() {
             // A date divider at the very start and whenever the day changes,
             // so a long-running conversation always shows when each part of
             // it happened, not just the time on each bubble.
-            const showDateDivider = i === 0 || dateKey(r.createdAt) !== dateKey(conversation.replies[i - 1].createdAt);
+            const prevReply = i > 0 ? conversation.replies[i - 1] : null;
+            const showDateDivider =
+              i === 0 ||
+              dateKey(r.createdAt) !== dateKey(prevReply!.createdAt) ||
+              prevReply?.sender === "SYSTEM";
             return (
               <div key={r.id} className="message-group">
                 {showDateDivider && (
