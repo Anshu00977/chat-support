@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../prisma";
+import { ADMINS_ROOM, SocketEvents, conversationRoom } from "@chat-support/shared";
 import { broadcastTyping } from "../socket/typing";
 import { getIO } from "../socket/ioInstance";
 import {
@@ -38,6 +39,12 @@ embeddedChatRouter.post("/embedded/internal/notify", async (req, res) => {
     if (conversationId) broadcastTyping(getIO(), conversationId, "SHOP");
   } else if (type === "reset") {
     await recordEmbeddedReset(shop);
+  } else if (type === "closed") {
+    const conversationId = await findEmbeddedConversationId(shop);
+    if (conversationId) {
+      await prisma.message.update({ where: { id: conversationId }, data: { status: "CLOSED" } });
+      getIO().to([conversationRoom(conversationId), ADMINS_ROOM]).emit(SocketEvents.CONVERSATION_CLOSED, { conversationId });
+    }
   }
   // "seen" (merchant opened the widget) has no dashboard UI yet — accepted and ignored.
 
