@@ -437,8 +437,12 @@ export async function setEmbeddedThreadClosed(
   await db.$executeRaw`UPDATE SupportThread SET closedAt = ${closed ? new Date() : null} WHERE shop = ${conversation.shop}`;
 }
 
-export async function recordEmbeddedReset(shop: string) {
-  const conversationId = await findEmbeddedConversationId(shop);
+export async function recordEmbeddedReset(shop: string, embeddedAppId?: number) {
+  const where = embeddedAppId
+    ? { source: "EMBEDDED" as const, embeddedAppId, shop }
+    : { source: "EMBEDDED" as const, shop };
+  const conv = await prisma.message.findFirst({ where, select: { id: true } });
+  const conversationId = conv?.id ?? null;
   if (!conversationId) return;
 
   const reply = await prisma.messageReply.create({

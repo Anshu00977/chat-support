@@ -35,15 +35,16 @@ embeddedChatRouter.post("/embedded/internal/notify", async (req, res) => {
   if (message?.id && message.threadId) {
     await ingestEmbeddedMessage(app, shop, message, { live: true });
   } else if (type === "typing") {
-    const conversationId = await findEmbeddedConversationId(shop);
-    if (conversationId) broadcastTyping(getIO(), conversationId, "SHOP");
+    // Filter by app.id so a store with multiple apps doesn't target the wrong conversation.
+    const conv = await prisma.message.findFirst({ where: { source: "EMBEDDED", embeddedAppId: app.id, shop }, select: { id: true } });
+    if (conv) broadcastTyping(getIO(), conv.id, "SHOP");
   } else if (type === "reset") {
-    await recordEmbeddedReset(shop);
+    await recordEmbeddedReset(shop, app.id);
   } else if (type === "closed") {
-    const conversationId = await findEmbeddedConversationId(shop);
-    if (conversationId) {
-      await prisma.message.update({ where: { id: conversationId }, data: { status: "CLOSED" } });
-      getIO().to([conversationRoom(conversationId), ADMINS_ROOM]).emit(SocketEvents.CONVERSATION_CLOSED, { conversationId });
+    const conv = await prisma.message.findFirst({ where: { source: "EMBEDDED", embeddedAppId: app.id, shop }, select: { id: true } });
+    if (conv) {
+      await prisma.message.update({ where: { id: conv.id }, data: { status: "CLOSED" } });
+      getIO().to([conversationRoom(conv.id), ADMINS_ROOM]).emit(SocketEvents.CONVERSATION_CLOSED, { conversationId: conv.id });
     }
   }
   // "seen" (merchant opened the widget) has no dashboard UI yet — accepted and ignored.
