@@ -194,11 +194,11 @@ export async function ingestEmbeddedMessage(
   const { conversation, isNew } = await findOrCreateConversation(app, shop, msg, name);
   const fromMerchant = msg.sender !== "admin";
 
-  // The intake form's name/email only arrive with the first message, so they
-  // are shown on it -- there is nowhere else in the thread they'd be visible.
-  const intakeLines = isNew
-    ? [name?.trim() && `Name: ${name.trim()}`, email?.trim() && `Email: ${email.trim()}`].filter(Boolean)
-    : [];
+  // The widget only sends name/email with the intake form submission, so their
+  // presence -- not whether the conversation row happens to be new -- is what
+  // marks the message to show them on. A thread mirrored here by an earlier
+  // sync already exists, and would otherwise lose its intake details entirely.
+  const intakeLines = [name?.trim() && `Name: ${name.trim()}`, email?.trim() && `Email: ${email.trim()}`].filter(Boolean);
   const replyBody = intakeLines.length ? `${intakeLines.join("\n")}\n\n${msg.body ?? ""}`.trim() : msg.body ?? "";
 
   let reply: MessageReply;
@@ -226,9 +226,17 @@ export async function ingestEmbeddedMessage(
   } else if (!isNew && conversation.status === "NEEDS_HUMAN" && !conversation.assignedAdminId) {
     status = "OPEN";
   }
+  // A thread that predates the intake form, or that was mirrored by a sync,
+  // is still titled after the shop -- rename it once a real name comes in.
+  const intakeTitle = !isNew && name?.trim() ? `${name.trim()} (${app.name})` : undefined;
   const updated = await prisma.message.update({
     where: { id: conversation.id },
-    data: { status, updatedAt: new Date(), snoozedUntil: fromMerchant ? null : undefined },
+    data: {
+      status,
+      updatedAt: new Date(),
+      snoozedUntil: fromMerchant ? null : undefined,
+      ...(intakeTitle ? { name: intakeTitle } : {}),
+    },
   });
 
   if (!live) return;
