@@ -96,7 +96,7 @@ function prettyShopName(shop: string) {
     .join(" ");
 }
 
-async function findOrCreateConversation(shop: string, first: WkMessage) {
+async function findOrCreateConversation(shop: string, first: WkMessage, contactName?: string) {
   const existing = await prisma.message.findUnique({ where: { externalThreadId: first.threadId } });
   if (existing) return { conversation: existing, isNew: false };
 
@@ -107,8 +107,10 @@ async function findOrCreateConversation(shop: string, first: WkMessage) {
         externalThreadId: first.threadId,
         shop,
         visitorId: `wishkeeper:${shop}`,
-        name: prettyShopName(shop),
-        body: first.body || first.attachmentName || "(attachment)",
+        name: contactName?.trim() || prettyShopName(shop),
+        body: contactName?.trim()
+          ? `${contactName.trim()} — ${first.body || first.attachmentName || "(attachment)"}`
+          : first.body || first.attachmentName || "(attachment)",
         status: first.sender === "admin" ? "OPEN" : "NEEDS_HUMAN",
       },
     });
@@ -126,11 +128,22 @@ async function findOrCreateConversation(shop: string, first: WkMessage) {
  * was already ingested (by externalId) is skipped. With `live`, pushes it to
  * open dashboards and emails admins when a thread starts or is reopened.
  */
-export async function ingestWishkeeperMessage(shop: string, wk: WkMessage, { live }: { live: boolean }) {
+export async function ingestWishkeeperMessage(
+  shop: string,
+  wk: WkMessage,
+  { live, name, email }: { live: boolean; name?: string; email?: string }
+) {
   if (await prisma.messageReply.findUnique({ where: { externalId: wk.id }, select: { id: true } })) return;
 
-  const { conversation, isNew } = await findOrCreateConversation(shop, wk);
+  const { conversation, isNew } = await findOrCreateConversation(shop, wk, name);
   const fromMerchant = wk.sender !== "admin";
+
+  // The widget only sends name/email with the intake form submission, so their
+  // presence -- not whether the conversation row happens to be new -- is what
+  // marks the message to show them on. A thread already mirrored by an earlier
+  // sync would otherwise lose its intake details entirely.
+  const intakeLines = [name?.trim() && `Name: ${name.trim()}`, email?.trim() && `Email: ${email.trim()}`].filter(Boolean);
+  const replyBody = intakeLines.length ? `${intakeLines.join("\n")}\n\n${wk.body ?? ""}`.trim() : wk.body ?? "";
 
   let reply: MessageReply;
   try {
@@ -139,7 +152,7 @@ export async function ingestWishkeeperMessage(shop: string, wk: WkMessage, { liv
         messageId: conversation.id,
         sender: fromMerchant ? "SHOP" : "ADMIN",
         adminName: fromMerchant ? null : env.wishkeeper.adminDisplayName,
-        body: wk.body ?? "",
+        body: replyBody,
         attachments: (wkAttachmentToAttachment(wk) as unknown as Prisma.InputJsonValue) ?? undefined,
         externalId: wk.id,
         createdAt: new Date(wk.createdAt),
@@ -157,11 +170,19 @@ export async function ingestWishkeeperMessage(shop: string, wk: WkMessage, { liv
   } else if (!isNew && conversation.status === "NEEDS_HUMAN" && !conversation.assignedAdminId) {
     status = "OPEN"; // answered (only reachable when backfilling replies sent from the old dashboard)
   }
+  // A thread that predates the intake form, or that was mirrored by a sync,
+  // is still titled after the shop -- rename it once a real name comes in.
+  const intakeTitle = !isNew && name?.trim() ? name.trim() : undefined;
   const updated = await prisma.message.update({
     where: { id: conversation.id },
     // A merchant reply wakes a snoozed conversation back up, same as a
     // widget customer's reply does.
-    data: { status, updatedAt: new Date(), snoozedUntil: fromMerchant ? null : undefined },
+    data: {
+      status,
+      updatedAt: new Date(),
+      snoozedUntil: fromMerchant ? null : undefined,
+      ...(intakeTitle ? { name: intakeTitle } : {}),
+    },
   });
 
   if (!live) return;
@@ -176,8 +197,8 @@ export async function ingestWishkeeperMessage(shop: string, wk: WkMessage, { liv
     void notifyAdminsNeedsHuman({
       messageId: conversation.id,
       shop,
-      name: shop,
-      email: null,
+      name: name?.trim() || shop,
+      email: email ?? null,
       body: wk.body || `(sent an attachment: ${wk.attachmentName ?? "file"})`,
       intro: `A WishKeeper merchant (${shop}) sent a support message.`,
     });

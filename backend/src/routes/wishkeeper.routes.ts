@@ -29,11 +29,11 @@ function requireInternalSecret(req: Request, res: Response, next: NextFunction) 
 
 // Merchant sent a message, is typing, or opened their chat ("seen").
 wishkeeperRouter.post("/internal/notify", requireInternalSecret, async (req, res) => {
-  const { shop, message, type } = (req.body ?? {}) as { shop?: string; message?: WkMessage; type?: string };
+  const { shop, message, type, name, email } = (req.body ?? {}) as { shop?: string; message?: WkMessage; type?: string; name?: string; email?: string };
   if (!shop) return res.status(400).json({ error: "Missing shop" });
 
   if (message?.id && message.threadId) {
-    await ingestWishkeeperMessage(shop, message, { live: true });
+    await ingestWishkeeperMessage(shop, message, { live: true, name, email });
   } else if (type === "typing") {
     const conversationId = await findWishkeeperConversationId(shop);
     if (conversationId) broadcastTyping(getIO(), conversationId, "SHOP");
