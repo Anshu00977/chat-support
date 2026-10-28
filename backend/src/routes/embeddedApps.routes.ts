@@ -44,6 +44,24 @@ embeddedAppsRouter.post("/", requireRole("SUPER_ADMIN"), async (req, res) => {
   res.status(201).json({ app: { id: app.id, name: app.name }, internalSecret });
 });
 
+embeddedAppsRouter.patch("/:id", requireRole("SUPER_ADMIN"), async (req, res) => {
+  const { databaseUrl, appUrl, adminDisplayName } = req.body as {
+    databaseUrl?: string;
+    appUrl?: string;
+    adminDisplayName?: string;
+  };
+  const app = await prisma.embeddedApp.update({
+    where: { id: Number(req.params.id) },
+    data: {
+      ...(appUrl !== undefined ? { appUrl: appUrl.trim().replace(/\/$/, "") } : {}),
+      ...(adminDisplayName !== undefined ? { adminDisplayName: adminDisplayName.trim() || "Support" } : {}),
+      ...(databaseUrl !== undefined ? { databaseUrl: databaseUrl.trim() || null } : {}),
+    },
+    select: { id: true, name: true, appUrl: true, adminDisplayName: true },
+  });
+  res.json({ app });
+});
+
 embeddedAppsRouter.delete("/:id", requireRole("SUPER_ADMIN"), async (req, res) => {
   await prisma.embeddedApp.delete({ where: { id: Number(req.params.id) } });
   res.status(204).send();

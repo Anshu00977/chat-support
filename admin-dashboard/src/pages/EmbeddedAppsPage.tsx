@@ -9,6 +9,13 @@ interface EmbeddedAppRow {
   adminDisplayName: string;
 }
 
+interface EditState {
+  id: number;
+  appUrl: string;
+  databaseUrl: string;
+  adminDisplayName: string;
+}
+
 export function EmbeddedAppsPage() {
   const [apps, setApps] = useState<EmbeddedAppRow[]>([]);
   const [name, setName] = useState("");
@@ -19,6 +26,8 @@ export function EmbeddedAppsPage() {
   const [newSecret, setNewSecret] = useState<{ name: string; secret: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [removingId, setRemovingId] = useState<number | null>(null);
+  const [editing, setEditing] = useState<EditState | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const load = () => api.get("/embedded-apps").then((res) => setApps(res.data.apps));
 
@@ -48,6 +57,23 @@ export function EmbeddedAppsPage() {
     await api.delete(`/embedded-apps/${removingId}`);
     setApps((prev) => prev.filter((a) => a.id !== removingId));
     setRemovingId(null);
+  };
+
+  const saveEdit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editing) return;
+    setEditError(null);
+    try {
+      await api.patch(`/embedded-apps/${editing.id}`, {
+        appUrl: editing.appUrl,
+        databaseUrl: editing.databaseUrl,
+        adminDisplayName: editing.adminDisplayName,
+      });
+      setEditing(null);
+      load();
+    } catch (err: any) {
+      setEditError(err.response?.data?.error ?? "Failed to save");
+    }
   };
 
   const copySecret = async () => {
@@ -87,7 +113,10 @@ export function EmbeddedAppsPage() {
               <tr key={a.id}>
                 <td>{a.name}</td>
                 <td>{a.appUrl}</td>
-                <td>
+                <td style={{ display: "flex", gap: 8 }}>
+                  <button className="btn-ghost" onClick={() => setEditing({ id: a.id, appUrl: a.appUrl, databaseUrl: "", adminDisplayName: a.adminDisplayName })}>
+                    Edit
+                  </button>
                   <button className="btn-ghost" onClick={() => setRemovingId(a.id)}>
                     Disconnect
                   </button>
@@ -134,6 +163,35 @@ export function EmbeddedAppsPage() {
             <button onClick={copySecret}>{copied ? "Copied!" : "Copy secret"}</button>
             <button onClick={() => setNewSecret(null)}>Close</button>
           </div>
+        </div>
+      )}
+
+      {editing && (
+        <div className="snippet-panel">
+          <h3>Edit app</h3>
+          <form onSubmit={saveEdit} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {editError && <div className="error-banner">{editError}</div>}
+            <input
+              placeholder="App URL"
+              value={editing.appUrl}
+              onChange={(e) => setEditing({ ...editing, appUrl: e.target.value })}
+              required
+            />
+            <input
+              placeholder="Database URL (mysql://...) — leave blank for DB-less mode"
+              value={editing.databaseUrl}
+              onChange={(e) => setEditing({ ...editing, databaseUrl: e.target.value })}
+            />
+            <input
+              placeholder='Reply sender name (default "Support")'
+              value={editing.adminDisplayName}
+              onChange={(e) => setEditing({ ...editing, adminDisplayName: e.target.value })}
+            />
+            <div className="snippet-actions">
+              <button type="submit">Save</button>
+              <button type="button" onClick={() => setEditing(null)}>Cancel</button>
+            </div>
+          </form>
         </div>
       )}
 
