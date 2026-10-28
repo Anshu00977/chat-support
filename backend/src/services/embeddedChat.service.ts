@@ -159,6 +159,9 @@ async function findOrCreateConversation(app: EmbeddedAppRow, shop: string, first
     const displayName = contactName?.trim()
       ? `${contactName.trim()} (${app.name})`
       : `${prettyShopName(shop)} (${app.name})`;
+    const bodyPreview = contactName?.trim()
+      ? `${contactName.trim()}${email?.trim() ? ` <${email.trim()}>` : ""} — ${first.body || first.attachmentName || "(attachment)"}`
+      : first.body || first.attachmentName || "(attachment)";
     const conversation = await prisma.message.create({
       data: {
         source: "EMBEDDED",
@@ -167,7 +170,7 @@ async function findOrCreateConversation(app: EmbeddedAppRow, shop: string, first
         shop,
         visitorId: `embedded:${app.id}:${shop}`,
         name: displayName,
-        body: first.body || first.attachmentName || "(attachment)",
+        body: bodyPreview,
         status: first.sender === "admin" ? "OPEN" : "NEEDS_HUMAN",
       },
     });
