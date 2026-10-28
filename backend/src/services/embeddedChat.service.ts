@@ -160,7 +160,7 @@ async function findOrCreateConversation(app: EmbeddedAppRow, shop: string, first
       ? `${contactName.trim()} (${app.name})`
       : `${prettyShopName(shop)} (${app.name})`;
     const bodyPreview = contactName?.trim()
-      ? `${contactName.trim()}${email?.trim() ? ` <${email.trim()}>` : ""} — ${first.body || first.attachmentName || "(attachment)"}`
+      ? `${contactName.trim()} — ${first.body || first.attachmentName || "(attachment)"}`
       : first.body || first.attachmentName || "(attachment)";
     const conversation = await prisma.message.create({
       data: {
