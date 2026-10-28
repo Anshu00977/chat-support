@@ -26,14 +26,14 @@ export const embeddedChatRouter = Router();
 
 // Merchant sent a message, is typing, opened their chat ("seen"), or started a new one ("reset").
 embeddedChatRouter.post("/embedded/internal/notify", async (req, res) => {
-  const { shop, message, type } = (req.body ?? {}) as { shop?: string; message?: EmbeddedMessage; type?: string };
+  const { shop, message, type, name, email } = (req.body ?? {}) as { shop?: string; message?: EmbeddedMessage; type?: string; name?: string; email?: string };
   if (!shop) return res.status(400).json({ error: "Missing shop" });
 
   const app = await verifyEmbeddedSecret(req.headers["x-internal-secret"] as string | undefined);
   if (!app) return res.status(403).json({ error: "Forbidden" });
 
   if (message?.id && message.threadId) {
-    await ingestEmbeddedMessage(app, shop, message, { live: true });
+    await ingestEmbeddedMessage(app, shop, message, { live: true, name, email });
   } else if (type === "typing") {
     // Filter by app.id so a store with multiple apps doesn't target the wrong conversation.
     const conv = await prisma.message.findFirst({ where: { source: "EMBEDDED", embeddedAppId: app.id, shop }, select: { id: true } });

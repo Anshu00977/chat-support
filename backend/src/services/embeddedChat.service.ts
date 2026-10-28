@@ -151,11 +151,14 @@ function prettyShopName(shop: string) {
     .join(" ");
 }
 
-async function findOrCreateConversation(app: EmbeddedAppRow, shop: string, first: EmbeddedMessage) {
+async function findOrCreateConversation(app: EmbeddedAppRow, shop: string, first: EmbeddedMessage, contactName?: string) {
   const existing = await prisma.message.findUnique({ where: { externalThreadId: first.threadId } });
   if (existing) return { conversation: existing, isNew: false };
 
   try {
+    const displayName = contactName?.trim()
+      ? `${contactName.trim()} (${app.name})`
+      : `${prettyShopName(shop)} (${app.name})`;
     const conversation = await prisma.message.create({
       data: {
         source: "EMBEDDED",
@@ -163,7 +166,7 @@ async function findOrCreateConversation(app: EmbeddedAppRow, shop: string, first
         externalThreadId: first.threadId,
         shop,
         visitorId: `embedded:${app.id}:${shop}`,
-        name: `${prettyShopName(shop)} (${app.name})`,
+        name: displayName,
         body: first.body || first.attachmentName || "(attachment)",
         status: first.sender === "admin" ? "OPEN" : "NEEDS_HUMAN",
       },
@@ -181,11 +184,11 @@ export async function ingestEmbeddedMessage(
   app: EmbeddedAppRow,
   shop: string,
   msg: EmbeddedMessage,
-  { live }: { live: boolean }
+  { live, name, email }: { live: boolean; name?: string; email?: string }
 ) {
   if (await prisma.messageReply.findUnique({ where: { externalId: msg.id }, select: { id: true } })) return;
 
-  const { conversation, isNew } = await findOrCreateConversation(app, shop, msg);
+  const { conversation, isNew } = await findOrCreateConversation(app, shop, msg, name);
   const fromMerchant = msg.sender !== "admin";
 
   let reply: MessageReply;
@@ -230,8 +233,8 @@ export async function ingestEmbeddedMessage(
     void notifyAdminsNeedsHuman({
       messageId: conversation.id,
       shop,
-      name: shop,
-      email: null,
+      name: name?.trim() || shop,
+      email: email ?? null,
       body: msg.body || `(sent an attachment: ${msg.attachmentName ?? "file"})`,
       intro: `A merchant on ${app.name} (${shop}) sent a support message.`,
     });
