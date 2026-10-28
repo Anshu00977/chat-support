@@ -194,6 +194,13 @@ export async function ingestEmbeddedMessage(
   const { conversation, isNew } = await findOrCreateConversation(app, shop, msg, name);
   const fromMerchant = msg.sender !== "admin";
 
+  // The intake form's name/email only arrive with the first message, so they
+  // are shown on it -- there is nowhere else in the thread they'd be visible.
+  const intakeLines = isNew
+    ? [name?.trim() && `Name: ${name.trim()}`, email?.trim() && `Email: ${email.trim()}`].filter(Boolean)
+    : [];
+  const replyBody = intakeLines.length ? `${intakeLines.join("\n")}\n\n${msg.body ?? ""}`.trim() : msg.body ?? "";
+
   let reply: MessageReply;
   try {
     reply = await prisma.messageReply.create({
@@ -201,7 +208,7 @@ export async function ingestEmbeddedMessage(
         messageId: conversation.id,
         sender: fromMerchant ? "SHOP" : "ADMIN",
         adminName: fromMerchant ? null : app.adminDisplayName,
-        body: msg.body ?? "",
+        body: replyBody,
         attachments: (attachmentToAttachment(app.id, msg) as unknown as Prisma.InputJsonValue) ?? undefined,
         externalId: msg.id,
         createdAt: new Date(msg.createdAt),
