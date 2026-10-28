@@ -45,7 +45,8 @@ embeddedAppsRouter.post("/", requireRole("SUPER_ADMIN"), async (req, res) => {
 });
 
 embeddedAppsRouter.patch("/:id", requireRole("SUPER_ADMIN"), async (req, res) => {
-  const { databaseUrl, appUrl, adminDisplayName } = req.body as {
+  const { name, databaseUrl, appUrl, adminDisplayName } = req.body as {
+    name?: string;
     databaseUrl?: string;
     appUrl?: string;
     adminDisplayName?: string;
@@ -53,6 +54,7 @@ embeddedAppsRouter.patch("/:id", requireRole("SUPER_ADMIN"), async (req, res) =>
   const app = await prisma.embeddedApp.update({
     where: { id: Number(req.params.id) },
     data: {
+      ...(name !== undefined ? { name: name.trim() } : {}),
       ...(appUrl !== undefined ? { appUrl: appUrl.trim().replace(/\/$/, "") } : {}),
       ...(adminDisplayName !== undefined ? { adminDisplayName: adminDisplayName.trim() || "Support" } : {}),
       ...(databaseUrl !== undefined ? { databaseUrl: databaseUrl.trim() || null } : {}),

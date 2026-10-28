@@ -11,6 +11,7 @@ interface EmbeddedAppRow {
 
 interface EditState {
   id: number;
+  name: string;
   appUrl: string;
   databaseUrl: string;
   adminDisplayName: string;
@@ -65,6 +66,7 @@ export function EmbeddedAppsPage() {
     setEditError(null);
     try {
       await api.patch(`/embedded-apps/${editing.id}`, {
+        name: editing.name,
         appUrl: editing.appUrl,
         databaseUrl: editing.databaseUrl,
         adminDisplayName: editing.adminDisplayName,
@@ -114,7 +116,7 @@ export function EmbeddedAppsPage() {
                 <td>{a.name}</td>
                 <td>{a.appUrl}</td>
                 <td style={{ display: "flex", gap: 8 }}>
-                  <button className="btn-ghost" onClick={() => setEditing({ id: a.id, appUrl: a.appUrl, databaseUrl: "", adminDisplayName: a.adminDisplayName })}>
+                  <button className="btn-ghost" onClick={() => setEditing({ id: a.id, name: a.name, appUrl: a.appUrl, databaseUrl: "", adminDisplayName: a.adminDisplayName })}>
                     Edit
                   </button>
                   <button className="btn-ghost" onClick={() => setRemovingId(a.id)}>
@@ -171,6 +173,12 @@ export function EmbeddedAppsPage() {
           <h3>Edit app</h3>
           <form onSubmit={saveEdit} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {editError && <div className="error-banner">{editError}</div>}
+            <input
+              placeholder="App name"
+              value={editing.name}
+              onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+              required
+            />
             <input
               placeholder="App URL"
               value={editing.appUrl}
